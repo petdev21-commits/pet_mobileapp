@@ -90,8 +90,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
-        child: Column(
+      body: GestureDetector(
+        onTap: () {
+          if (dropdownOpen) {
+            setState(() {
+              dropdownOpen = false;
+            });
+          }
+        },
+        child: SafeArea(
+          child: Column(
           children: [
             // Top App Bar with User Profile
             Container(
@@ -155,106 +163,147 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ),
                     ],
                   ),
-                  // User Profile Dropdown
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        dropdownOpen = !dropdownOpen;
-                      });
-                    },
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF8B5CF6), Color(0xFF6366F1)],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Center(
-                        child: Text(
-                          currentUser?.name.substring(0, 1).toUpperCase() ?? 'S',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                  // User Profile Rectangle with Circle and Dropdown
+                  Stack(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            dropdownOpen = !dropdownOpen;
+                          });
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F4F6),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 32,
+                                height: 32,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    currentUser?.name.substring(0, 1).toUpperCase() ?? 'S',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(
+                                dropdownOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                                color: const Color(0xFF6B7280),
+                                size: 16,
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ),
+                      // Dropdown Menu (Overlay Card)
+                      if (dropdownOpen)
+                        Positioned(
+                          top: 50,
+                          right: 0,
+                          child: Material(
+                            elevation: 8,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              width: 220,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.15),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Email
+                                  Text(
+                                    currentUser?.email ?? 'user@example.com',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF1F2937),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  // Role Badge
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF6366F1),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      currentUser?.role ?? 'admin',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  // Divider
+                                  Container(
+                                    height: 1,
+                                    color: const Color(0xFFE5E7EB),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  // Sign Out Button
+                                  GestureDetector(
+                                    onTap: handleSignOut,
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.logout,
+                                          color: Color(0xFFEF4444),
+                                          size: 18,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        const Text(
+                                          'Sign Out',
+                                          style: TextStyle(
+                                            color: Color(0xFFEF4444),
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
             ),
 
-            // Dropdown Menu
-            if (dropdownOpen)
-              Container(
-                margin: const EdgeInsets.only(right: 16, top: 8),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 20,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      currentUser?.email ?? '',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1F2937),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF6366F1).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        currentUser?.role ?? 'admin',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF6366F1),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 24),
-                    GestureDetector(
-                      onTap: handleSignOut,
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.logout,
-                            color: Color(0xFFEF4444),
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Sign Out',
-                            style: TextStyle(
-                              color: Color(0xFFEF4444),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
 
             // Main Content
             Expanded(
@@ -402,7 +451,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       gradient: const [Color(0xFF3B82F6), Color(0xFF06B6D4)],
                       stats: [
                         {'label': 'Search Users', 'value': 'All Roles'},
-                        {'label': 'Total Users', 'value': '$totalUsers'},
+                        {'label': 'Filter by Role', 'value': '4 Types'},
                       ],
                       buttonText: 'Search Users →',
                       onTap: () {},
@@ -443,8 +492,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       subtitle: 'Manage user balances',
                       gradient: const [Color(0xFFA855F7), Color(0xFF6366F1)],
                       stats: [
-                        {'label': 'User Wallets', 'value': '$totalUsers Users'},
-                        {'label': 'Company Balance', 'value': _formatCurrency(companyBalance)},
+                        {'label': 'User Wallets', 'value': 'All Users'},
+                        {'label': 'Company Balance', 'value': '100Cr'},
                       ],
                       buttonText: 'Manage Wallets →',
                       onTap: () {},
@@ -452,6 +501,63 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ],
                 ),
               ),
+            ),
+          ],
+        ),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            // Dashboard
+            _buildBottomNavItem(
+              icon: Icons.dashboard_outlined,
+              activeIcon: Icons.dashboard,
+              label: 'Dashboard',
+              isActive: true,
+              onTap: () {},
+            ),
+            // Users
+            _buildBottomNavItem(
+              icon: Icons.people_outline,
+              activeIcon: Icons.people,
+              label: 'Users',
+              isActive: false,
+              onTap: () {},
+            ),
+            // Center Elevated Option (Flying Money)
+            _buildCenterNavItem(
+              icon: Icons.flight_takeoff,
+              label: 'Transfer',
+              onTap: () {},
+            ),
+            // Value
+            _buildBottomNavItem(
+              icon: Icons.attach_money_outlined,
+              activeIcon: Icons.attach_money,
+              label: 'Value',
+              isActive: false,
+              onTap: () {},
+            ),
+            // Wallets
+            _buildBottomNavItem(
+              icon: Icons.account_balance_wallet_outlined,
+              activeIcon: Icons.account_balance_wallet,
+              label: 'Wallets',
+              isActive: false,
+              onTap: () {},
             ),
           ],
         ),
@@ -710,6 +816,93 @@ class _AdminDashboardState extends State<AdminDashboard> {
   /// Format Pet Coins
   String _formatPetCoins(double amount) {
     return '${amount.toStringAsFixed(2)} PET';
+  }
+
+  /// Build bottom navigation item
+  Widget _buildBottomNavItem({
+    required IconData icon,
+    required IconData activeIcon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isActive ? activeIcon : icon,
+              color: isActive ? const Color(0xFF6366F1) : const Color(0xFF9CA3AF),
+              size: 24,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: isActive ? const Color(0xFF6366F1) : const Color(0xFF9CA3AF),
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Build center elevated navigation item
+  Widget _buildCenterNavItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+                ),
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6366F1).withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Icon(
+                  icon,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF6366F1),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
