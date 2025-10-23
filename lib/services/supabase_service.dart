@@ -270,13 +270,73 @@ class SupabaseService {
           .from('pet_coin_settings')
           .select('coin_value_rupees')
           .eq('is_active', true)
-          .order('created_at', ascending: false)
+          .order('updated_at', ascending: false)
           .limit(1)
           .single();
 
       return (response['coin_value_rupees'] ?? 1.0).toDouble();
     } catch (e) {
       return 1.0; // Default to 1 rupee per PET coin
+    }
+  }
+
+  /// Get current PET coin value with full details
+  static Future<Map<String, dynamic>?> getCurrentPetCoinValue() async {
+    try {
+      final response = await _client
+          .from('pet_coin_settings')
+          .select('*')
+          .eq('is_active', true)
+          .order('updated_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      return response;
+    } catch (e) {
+      print('Error fetching current PET coin value: $e');
+      return null;
+    }
+  }
+
+  /// Update PET coin value
+  static Future<bool> updateCurrentPrice(double newValue, String updatedBy) async {
+    try {
+      // First, deactivate all current active values
+      await _client
+          .from('pet_coin_settings')
+          .update({'is_active': false})
+          .eq('is_active', true);
+
+      // Insert new value
+      final response = await _client
+          .from('pet_coin_settings')
+          .insert({
+            'coin_value_rupees': newValue,
+            'is_active': true,
+            'updated_by': updatedBy,
+          })
+          .select();
+
+      return response.isNotEmpty;
+    } catch (e) {
+      print('Error updating PET coin value: $e');
+      return false;
+    }
+  }
+
+  /// Get PET coin value history
+  static Future<List<Map<String, dynamic>>> getPetCoinValueHistory() async {
+    try {
+      final response = await _client
+          .from('pet_coin_settings')
+          .select('*')
+          .order('updated_at', ascending: false)
+          .limit(20);
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      print('Error fetching PET coin value history: $e');
+      return [];
     }
   }
 
