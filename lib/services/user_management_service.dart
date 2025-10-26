@@ -81,18 +81,37 @@ class UserManagementService {
   /// Get all users
   static Future<({List<Map<String, dynamic>> users, String? error})> getAllUsers() async {
     try {
+      print('Fetching all users from Supabase public.users table...');
+      
+      // Get users from public.users table (where your actual data is stored)
       final response = await _client
           .from('users')
-          .select('id, email, role, name, created_at')
+          .select('id, email, role, created_at')
           .order('created_at', ascending: false);
 
+      print('Raw users response from public.users: $response');
+
       if (response.isEmpty) {
+        print('No users found in public.users table');
         return (users: <Map<String, dynamic>>[], error: null);
       }
 
-      return (users: List<Map<String, dynamic>>.from(response), error: null);
+      // Convert to our format with name generated from email
+      final users = response.map((user) {
+        return {
+          'id': user['id'] ?? '',
+          'email': user['email'] ?? '',
+          'role': user['role'] ?? 'customer',
+          'name': (user['email'] ?? '').split('@')[0], // Generate name from email
+          'created_at': user['created_at'] ?? DateTime.now().toIso8601String(),
+        };
+      }).toList();
+
+      print('Processed ${users.length} users from public.users table');
+      
+      return (users: users, error: null);
     } catch (e) {
-      print('Error fetching users: $e');
+      print('Error fetching users from public.users: $e');
       return (users: <Map<String, dynamic>>[], error: e.toString());
     }
   }
@@ -184,11 +203,17 @@ class UserManagementService {
   /// Get user statistics
   static Future<({int totalUsers, int customerCount, int partnerCount, int adminCount, String? error})> getUserStatistics() async {
     try {
+      print('Fetching user statistics from Supabase public.users table...');
+      
+      // Get users from public.users table (where your actual data is stored)
       final response = await _client
           .from('users')
           .select('role');
 
+      print('Raw response from public.users: $response');
+
       if (response.isEmpty) {
+        print('No users found in public.users table');
         return (totalUsers: 0, customerCount: 0, partnerCount: 0, adminCount: 0, error: null);
       }
 
@@ -198,7 +223,8 @@ class UserManagementService {
       int adminCount = 0;
 
       for (var user in response) {
-        final role = user['role']?.toString().toLowerCase() ?? '';
+        final role = user['role']?.toString().toLowerCase() ?? 'customer';
+        print('Processing user with role: $role');
         switch (role) {
           case 'customer':
             customerCount++;
@@ -216,6 +242,8 @@ class UserManagementService {
         }
       }
 
+      print('Statistics calculated: total=$totalUsers, customers=$customerCount, partners=$partnerCount, admins=$adminCount');
+
       return (
         totalUsers: totalUsers,
         customerCount: customerCount,
@@ -224,7 +252,7 @@ class UserManagementService {
         error: null
       );
     } catch (e) {
-      print('Error fetching user statistics: $e');
+      print('Error fetching user statistics from public.users: $e');
       return (
         totalUsers: 0,
         customerCount: 0,

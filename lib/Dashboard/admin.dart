@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/supabase_service.dart';
+import '../services/search_service.dart';
 import '../models/user.dart';
 import '../signin.dart';
 import '../admin/usercard.dart';
 import '../admin/coinwallets.dart';
 import '../admin/coinvalue.dart';
 import '../admin/usermanagement.dart';
-import '../admin/searchuser.dart';
 import '../admin/transfer.dart';
 
 class AdminDashboard extends StatefulWidget {
@@ -26,11 +26,24 @@ class _AdminDashboardState extends State<AdminDashboard> {
   double totalPendingCoins = 0.0;
   int totalUsers = 0;
   double companyBalance = 100000000.0; // 100Cr
+  
+  // Quick search functionality
+  String searchQuery = '';
+  List<SearchResult> suggestions = [];
+  bool showSuggestions = false;
+  bool searchLoading = false;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     loadUserData();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> loadUserData() async {
@@ -65,6 +78,75 @@ class _AdminDashboardState extends State<AdminDashboard> {
       context,
       MaterialPageRoute(builder: (context) => const SignInPage()),
     );
+  }
+
+  Future<void> handleQuickSearch(String query) async {
+    setState(() {
+      searchQuery = query;
+    });
+
+    // Clear suggestions when query is empty
+    if (query.trim().isEmpty) {
+      setState(() {
+        suggestions = [];
+        showSuggestions = false;
+      });
+      return;
+    }
+
+    // Fetch suggestions while typing
+    if (query.length >= 2) {
+      await fetchQuickSearchSuggestions(query);
+    }
+  }
+
+  Future<void> fetchQuickSearchSuggestions(String query) async {
+    try {
+      final result = await SearchService.searchUsers(query);
+      if (result.error == null && result.users.isNotEmpty) {
+        setState(() {
+          suggestions = result.users.take(5).toList(); // Limit to 5 suggestions
+          showSuggestions = true;
+        });
+      }
+    } catch (e) {
+      print('Quick search suggestion error: $e');
+      setState(() {
+        suggestions = [];
+      });
+    }
+  }
+
+  void handleSuggestionSelect(SearchResult suggestion) {
+    setState(() {
+      searchQuery = suggestion.email;
+      _searchController.text = suggestion.email;
+      showSuggestions = false;
+    });
+    navigateToUserManagementWithSearch(suggestion.email);
+  }
+
+  void navigateToUserManagementWithSearch(String query) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => UserManagementPage(initialSearchQuery: query),
+      ),
+    ).then((_) {
+      // Clear search when returning
+      setState(() {
+        searchQuery = '';
+        _searchController.clear();
+        suggestions = [];
+        showSuggestions = false;
+      });
+    });
+  }
+
+  void handleQuickSearchSubmit() {
+    if (searchQuery.trim().isNotEmpty) {
+      navigateToUserManagementWithSearch(searchQuery);
+    }
   }
 
   @override
@@ -104,6 +186,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
               if (dropdownOpen) {
                 setState(() {
                   dropdownOpen = false;
+                });
+              }
+              if (showSuggestions) {
+                setState(() {
+                  showSuggestions = false;
                 });
               }
             },
@@ -295,57 +382,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           const SizedBox(height: 24),
 
                           // Quick Search Card
-                          _buildCard(
-                            icon: '🔍',
-                            title: 'Quick Search',
-                            subtitle: 'Find users instantly',
-                            gradient: const [Color(0xFF3B82F6), Color(0xFF06B6D4)],
-                            child: TextField(
-                              decoration: InputDecoration(
-                                hintText: 'Search all users...',
-                                hintStyle: TextStyle(
-                                  color: Colors.grey[500],
-                                  fontSize: 14,
-                                ),
-                                prefixIcon: const Icon(Icons.search, color: Color(0xFF94A3B8)),
-                                suffixIcon: Container(
-                                  margin: const EdgeInsets.all(8),
-                                  child: ElevatedButton(
-                                    onPressed: () {},
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF3B82F6),
-                                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      elevation: 0,
-                                    ),
-                                    child: const Text(
-                                      'Search',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 2),
-                                ),
-                                filled: true,
-                                fillColor: Colors.white,
-                              ),
-                            ),
-                          ),
+                          _buildQuickSearchCard(),
                           const SizedBox(height: 16),
 
                           // Admin Feature Cards Grid
@@ -368,24 +405,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           ),
                           const SizedBox(height: 16),
 
-                          _buildAdminCard(
-                            icon: '🔍',
-                            title: 'User Search',
-                            subtitle: 'Search and manage all users',
-                            gradient: const [Color(0xFF3B82F6), Color(0xFF06B6D4)],
-                            stats: [
-                              {'label': 'Search Users', 'value': 'All Roles'},
-                              {'label': 'Filter by Role', 'value': '4 Types'},
-                            ],
-                            buttonText: 'Search Users →',
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => const SearchUserPage()),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 16),
 
                           _buildAdminCard(
                             icon: '👥',
@@ -559,7 +578,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
               activeIcon: Icons.dashboard,
               label: 'Dashboard',
               isActive: true,
-              onTap: () {},
+              onTap: () {
+                // Already on dashboard, no navigation needed
+              },
             ),
             // Users
             _buildBottomNavItem(
@@ -570,7 +591,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const UserCard()),
+                  MaterialPageRoute(builder: (context) => const UserManagementPage()),
                 );
               },
             ),
@@ -578,7 +599,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
             _buildCenterNavItem(
               icon: Icons.flight_takeoff,
               label: 'Transfer',
-              onTap: () {},
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const TransferPage()),
+                );
+              },
             ),
             // Value
             _buildBottomNavItem(
@@ -586,7 +612,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
               activeIcon: Icons.attach_money,
               label: 'Value',
               isActive: false,
-              onTap: () {},
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CoinValuePage()),
+                );
+              },
             ),
             // Wallets
             _buildBottomNavItem(
@@ -594,7 +625,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
               activeIcon: Icons.account_balance_wallet,
               label: 'Wallets',
               isActive: false,
-              onTap: () {},
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const CoinWalletsPage()),
+                );
+              },
             ),
           ],
         ),
@@ -602,75 +638,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _buildCard({
-    required String icon,
-    required String title,
-    required String subtitle,
-    required List<Color> gradient,
-    required Widget child,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(colors: gradient),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text(icon, style: const TextStyle(fontSize: 24)),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1F2937),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          child,
-        ],
-      ),
-    );
-  }
 
   Widget _buildAdminCard({
     required String icon,
@@ -934,6 +901,217 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildQuickSearchCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF3B82F6), Color(0xFF06B6D4)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(
+                  child: Text('🔍', style: TextStyle(fontSize: 24)),
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Quick Search',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1F2937),
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Find users instantly',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _searchController,
+            onChanged: handleQuickSearch,
+            onTap: () {
+              if (suggestions.isNotEmpty) {
+                setState(() {
+                  showSuggestions = true;
+                });
+              }
+            },
+            decoration: InputDecoration(
+              hintText: 'Search all users...',
+              hintStyle: TextStyle(
+                color: Colors.grey[500],
+                fontSize: 14,
+              ),
+              prefixIcon: const Icon(Icons.search, color: Color(0xFF94A3B8)),
+              suffixIcon: Container(
+                margin: const EdgeInsets.all(8),
+                child: ElevatedButton(
+                  onPressed: handleQuickSearchSubmit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3B82F6),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Search',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 2),
+              ),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+          ),
+          // Suggestions within the card
+          if (showSuggestions && suggestions.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Column(
+                children: suggestions.map((suggestion) {
+                  return GestureDetector(
+                    onTap: () => handleSuggestionSelect(suggestion),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          // Avatar
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: SearchService.getRoleColors(suggestion.role),
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Center(
+                              child: Text(
+                                suggestion.email.substring(0, 1).toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          // Content
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  suggestion.email,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF1F2937),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  SearchService.formatRole(suggestion.role),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Role Badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: SearchService.getRoleColors(suggestion.role)[0].withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              SearchService.formatRole(suggestion.role),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: SearchService.getRoleColors(suggestion.role)[0],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
