@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import '../services/supabase_service.dart';
 import '../services/search_service.dart';
+import '../services/transfer_service.dart';
+import '../services/user_management_service.dart';
+import '../services/pet_coin_value_service.dart';
+import '../services/pet_coin_wallet_service.dart';
 import '../models/user.dart';
 import '../signin.dart';
-import '../admin/usercard.dart';
 import '../admin/coinwallets.dart';
 import '../admin/coinvalue.dart';
 import '../admin/usermanagement.dart';
@@ -22,10 +24,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
   bool isLoading = true;
   bool dropdownOpen = false;
   int pendingTransfers = 0;
-  double petCoinValue = 100.00;
+  double petCoinValue = 1.0;
   double totalPendingCoins = 0.0;
   int totalUsers = 0;
-  double companyBalance = 100000000.0; // 100Cr
+  int customerCount = 0;
+  int partnerCount = 0;
+  int adminCount = 0;
+  double companyBalance = 0.0;
+  double totalCoinsInCirculation = 0.0;
+  int totalWallets = 0;
   
   // Quick search functionality
   String searchQuery = '';
@@ -59,9 +66,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
         currentUser = user;
         pendingTransfers = dashboardData['pendingTransfers'] ?? 0;
         totalPendingCoins = dashboardData['totalPendingCoins'] ?? 0.0;
-        petCoinValue = dashboardData['currentPetCoinPrice'] ?? 100.0;
+        petCoinValue = dashboardData['currentPetCoinPrice'] ?? 1.0;
         totalUsers = dashboardData['totalUsers'] ?? 0;
-        companyBalance = dashboardData['companyBalance'] ?? 100000000.0;
+        customerCount = dashboardData['customerCount'] ?? 0;
+        partnerCount = dashboardData['partnerCount'] ?? 0;
+        adminCount = dashboardData['adminCount'] ?? 0;
+        companyBalance = dashboardData['companyBalance'] ?? 0.0;
+        totalCoinsInCirculation = dashboardData['totalCoinsInCirculation'] ?? 0.0;
+        totalWallets = dashboardData['totalWallets'] ?? 0;
         isLoading = false;
       });
     } catch (e) {
@@ -393,7 +405,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             gradient: const [Color(0xFFA855F7), Color(0xFF6366F1)],
                             stats: [
                               {'label': 'Pending Transfers', 'value': '$pendingTransfers'},
-                              {'label': 'Total PET Coins', 'value': _formatPetCoins(totalPendingCoins)},
+                              {'label': 'Total PET Coins', 'value': TransferService.formatCoins(totalPendingCoins)},
                             ],
                             buttonText: 'Manage →',
                             onTap: () {
@@ -412,8 +424,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             subtitle: 'Add and manage users',
                             gradient: const [Color(0xFF10B981), Color(0xFF059669)],
                             stats: [
-                              {'label': 'Add Users', 'value': 'Any Role'},
-                              {'label': 'Manage System', 'value': 'Full Control'},
+                              {'label': 'Total Users', 'value': '$totalUsers'},
+                              {'label': 'Customers', 'value': '$customerCount'},
+                              {'label': 'Partners', 'value': '$partnerCount'},
+                              {'label': 'Admins', 'value': '$adminCount'},
                             ],
                             buttonText: 'Manage Users →',
                             onTap: () {
@@ -431,8 +445,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             subtitle: 'Set exchange rate',
                             gradient: const [Color(0xFFF59E0B), Color(0xFFEA580C)],
                             stats: [
-                              {'label': 'Current Rate', 'value': '₹${petCoinValue.toStringAsFixed(2)}'},
-                              {'label': 'Manage Value', 'value': 'Admin'},
+                              {'label': 'Current Rate', 'value': PetCoinValueService.formatCurrency(petCoinValue)},
+                              {'label': 'Company Value', 'value': _formatCompanyValue(companyBalance)},
                             ],
                             buttonText: 'Set Value →',
                             onTap: () {
@@ -450,8 +464,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             subtitle: 'Manage user balances',
                             gradient: const [Color(0xFFA855F7), Color(0xFF6366F1)],
                             stats: [
-                              {'label': 'User Wallets', 'value': 'All Users'},
-                              {'label': 'Company Balance', 'value': '100Cr'},
+                              {'label': 'Total Wallets', 'value': '$totalWallets'},
+                              {'label': 'Coins in Circulation', 'value': PetCoinWalletService.formatCoins(totalCoinsInCirculation)},
                             ],
                             buttonText: 'Manage Wallets →',
                             onTap: () {
@@ -779,43 +793,74 @@ class _AdminDashboardState extends State<AdminDashboard> {
   /// Get admin dashboard data
   Future<Map<String, dynamic>> _getAdminDashboardData() async {
     try {
-      final pendingTransfers = await SupabaseService.getPendingTransactions();
-      final allUsers = await SupabaseService.getAllUsers();
-      final currentPrice = await SupabaseService.getCurrentPrice();
+      // Get pending transfers using TransferService
+      final pendingTransfersResult = await TransferService.getPendingTransactions();
+      final pendingTransfers = pendingTransfersResult.transactions;
       
-      // Calculate total pending coins
+      // Get user statistics using UserManagementService
+      final userStatsResult = await UserManagementService.getUserStatistics();
+      
+      // Get current PET coin value using PetCoinValueService
+      final petCoinValueResult = await PetCoinValueService.getCurrentValue();
+      
+      // Get wallet statistics using PetCoinWalletService
+      final totalCoinsResult = await PetCoinWalletService.getTotalCoinsInCirculation();
+      final allWalletsResult = await PetCoinWalletService.getAllWallets();
+      
+      // Calculate total pending coins from transfer amounts
       double totalPendingCoins = 0.0;
       for (var transfer in pendingTransfers) {
-        totalPendingCoins += (transfer['amount'] ?? 0.0).toDouble();
+        totalPendingCoins += transfer.petCoinsAmount ?? 0.0;
       }
       
-      // Calculate company balance (simplified)
-      double companyBalance = allUsers.length * 1000.0; // Placeholder calculation
+      // Calculate company balance (total coins in circulation * current price)
+      double companyBalance = 0.0;
+      if (totalCoinsResult.error == null && petCoinValueResult.value != null) {
+        companyBalance = totalCoinsResult.total * petCoinValueResult.value!.coinValueRupees;
+      }
       
       return {
         'pendingTransfers': pendingTransfers.length,
         'totalPendingCoins': totalPendingCoins,
-        'totalUsers': allUsers.length,
+        'totalUsers': userStatsResult.totalUsers,
+        'customerCount': userStatsResult.customerCount,
+        'partnerCount': userStatsResult.partnerCount,
+        'adminCount': userStatsResult.adminCount,
         'companyBalance': companyBalance,
-        'petCoinValue': currentPrice,
+        'currentPetCoinPrice': petCoinValueResult.value?.coinValueRupees ?? 1.0,
+        'totalCoinsInCirculation': totalCoinsResult.total,
+        'totalWallets': allWalletsResult.wallets.length,
         'pendingTransfersList': pendingTransfers,
       };
     } catch (e) {
+      print('Error loading admin dashboard data: $e');
       return {
         'pendingTransfers': 0,
         'totalPendingCoins': 0.0,
         'totalUsers': 0,
+        'customerCount': 0,
+        'partnerCount': 0,
+        'adminCount': 0,
         'companyBalance': 0.0,
-        'petCoinValue': 100.0,
+        'currentPetCoinPrice': 1.0,
+        'totalCoinsInCirculation': 0.0,
+        'totalWallets': 0,
         'pendingTransfersList': [],
       };
     }
   }
 
-
-  /// Format Pet Coins
-  String _formatPetCoins(double amount) {
-    return '${amount.toStringAsFixed(2)} PET';
+  /// Format company value as whole number with Cr suffix
+  String _formatCompanyValue(double value) {
+    if (value >= 10000000) { // 1 crore
+      return '${(value / 10000000).toStringAsFixed(0)}Cr';
+    } else if (value >= 100000) { // 1 lakh
+      return '${(value / 100000).toStringAsFixed(0)}L';
+    } else if (value >= 1000) { // 1 thousand
+      return '${(value / 1000).toStringAsFixed(0)}K';
+    } else {
+      return '₹${value.toStringAsFixed(0)}';
+    }
   }
 
   /// Build bottom navigation item
