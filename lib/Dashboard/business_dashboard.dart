@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/supabase_service.dart';
+import '../services/search_service.dart';
+import '../services/transfer_service.dart';
 import '../services/coin_types_service.dart';
 import '../models/user.dart';
 import '../signin.dart';
-import '../customer_qr_code.dart';
+import '../qr_payment.dart';
 import 'transaction_status.dart';
 
-class CustomerDashboard extends StatefulWidget {
-  const CustomerDashboard({super.key});
+class BusinessDashboard extends StatefulWidget {
+  const BusinessDashboard({super.key});
 
   @override
-  State<CustomerDashboard> createState() => _CustomerDashboardState();
+  State<BusinessDashboard> createState() => _BusinessDashboardState();
 }
 
-class _CustomerDashboardState extends State<CustomerDashboard> {
+class _BusinessDashboardState extends State<BusinessDashboard> {
   User? currentUser;
   bool isLoading = true;
   bool dropdownOpen = false;
@@ -136,10 +138,10 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         });
       });
     } else if (index == 2) {
-      // Center button - My QR Code (for receiving payments)
+      // Center button - QR Payment
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (context) => const CustomerQRCodeScreen()),
+        MaterialPageRoute(builder: (context) => const QRPaymentScreen()),
       ).then((_) {
         // Reload data when returning from QR screen
         loadUserData();
@@ -696,7 +698,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                             ),
                           ),
                           Text(
-                            'Customer Portal',
+                            'Business Portal',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[600],
@@ -864,7 +866,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Manage your PET Coin wallet',
+                                  'Manage your business PET Coin wallet',
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: Colors.white.withOpacity(0.9),
@@ -1690,7 +1692,185 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
     }
   }
 
-  /// Show transaction history with coin types
+  /// Show send payment dialog
+  // ignore: unused_element
+  void _showSendPaymentDialog(BuildContext context) {
+    final TextEditingController emailController = TextEditingController();
+    final TextEditingController amountController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text(
+                'Send Payment',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              content: SizedBox(
+                width: 300,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: emailController,
+                      decoration: InputDecoration(
+                        labelText: 'Recipient Email',
+                        hintText: 'Enter recipient email',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: amountController,
+                      decoration: InputDecoration(
+                        labelText: 'Amount (PET Coins)',
+                        hintText: 'Enter amount',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Balance: ${_formatPetCoins(walletBalance)} 🪙',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final email = emailController.text.trim();
+                    final amount = double.tryParse(amountController.text);
+
+                    if (email.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please enter recipient email'),
+                          backgroundColor: Color(0xFFEF4444),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (amount == null || amount <= 0) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please enter a valid amount'),
+                          backgroundColor: Color(0xFFEF4444),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (amount > walletBalance) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Insufficient balance'),
+                          backgroundColor: Color(0xFFEF4444),
+                        ),
+                      );
+                      return;
+                    }
+
+                    Navigator.pop(context);
+
+                    // Find user by email
+                    final searchResult = await SearchService.searchUsers(email);
+
+                    if (searchResult.users.isEmpty) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Recipient not found'),
+                            backgroundColor: Color(0xFFEF4444),
+                          ),
+                        );
+                      }
+                      return;
+                    }
+
+                    final recipient = searchResult.users.first;
+
+                    // Create pending transfer transaction (requires admin approval)
+                    final result = await TransferService.createPendingTransfer(
+                      fromUserId: currentUser!.id,
+                      toUserId: recipient.id,
+                      petCoinsAmount: amount,
+                      description: 'Transfer to ${recipient.email}',
+                    );
+
+                    if (result.success) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Transfer request sent! ${_formatPetCoins(amount)} 🪙 pending admin approval',
+                            ),
+                            backgroundColor: const Color(0xFF10B981),
+                            duration: const Duration(seconds: 4),
+                          ),
+                        );
+                      }
+                      // Reload data
+                      loadUserData();
+                    } else {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Transfer failed: ${result.error}'),
+                            backgroundColor: const Color(0xFFEF4444),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B5CF6),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Send',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Show transaction history
   void _showTransactionHistory(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -1737,7 +1917,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text('📭', style: TextStyle(fontSize: 64)),
+                            Text('📭', style: const TextStyle(fontSize: 64)),
                             const SizedBox(height: 16),
                             Text(
                               'No transactions yet',
@@ -1806,9 +1986,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                       const SizedBox(height: 2),
                                       Text(
                                         transaction['description'] ??
-                                            _formatTransactionTime(
-                                              transaction['created_at'],
-                                            ),
+                                            'No description',
                                         style: TextStyle(
                                           fontSize: 12,
                                           color: Colors.grey[600],
@@ -1864,7 +2042,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 8,
-                                        vertical: 3,
+                                        vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
                                         color: _getTransactionColor(

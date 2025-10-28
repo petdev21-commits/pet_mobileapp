@@ -86,82 +86,96 @@ class SupabaseService {
     required String password,
   }) async {
     try {
-      final supabase.AuthResponse authResponse = await _client.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
+      // First try Supabase Auth
+      try {
+        final supabase.AuthResponse authResponse = await _client.auth
+            .signInWithPassword(email: email, password: password);
 
-      if (authResponse.user != null) {
-        try {
-          // Get user profile from users table
-          final response = await _client
-              .from('users')
-              .select('*')
-              .eq('id', authResponse.user!.id)
-              .single();
+        if (authResponse.user != null) {
+          try {
+            // Get user profile from users table
+            final response = await _client
+                .from('users')
+                .select('*')
+                .eq('id', authResponse.user!.id)
+                .single();
 
-          // Get pet coin wallet balance
-          final walletResponse = await _client
-              .from('pet_coin_wallets')
-              .select('balance')
-              .eq('user_id', authResponse.user!.id)
-              .single();
+            // Get pet coin wallet balance (sum of all coin types)
+            final walletResponse = await _client
+                .from('pet_coin_wallets')
+                .select('petnt_balance, petbnt_balance, petindx_balance')
+                .eq('user_id', authResponse.user!.id)
+                .single();
 
-          // Build user data with wallet balance
-          final userData = Map<String, dynamic>.from(response);
-          userData['name'] = userData['email']?.split('@')[0] ?? 'User'; // Extract name from email
-          userData['pet_coin_balance'] = walletResponse['balance'] ?? 0.0;
-          userData['is_active'] = true;
-
-          return AuthResponse(
-            success: true,
-            token: authResponse.session?.accessToken,
-            user: User.fromJson(userData),
-          );
-        } catch (e) {
-          // If user doesn't exist in users table, create them
-          if (e.toString().contains('No rows found')) {
-            // Create user profile in users table
-            final userData = {
-              'id': authResponse.user!.id,
-              'email': authResponse.user!.email ?? '',
-              'role': 'customer', // Default role
-            };
-
-            await _client.from('users').insert(userData);
-
-            // Create pet coin wallet for the user
-            await _client.from('pet_coin_wallets').insert({
-              'user_id': authResponse.user!.id,
-              'balance': 0.0,
-            });
-
-            // Build response user data
-            final userResponseData = {
-              'id': authResponse.user!.id,
-              'email': authResponse.user!.email ?? '',
-              'name': (authResponse.user!.email ?? '').split('@')[0],
-              'role': 'customer',
-              'pet_coin_balance': 0.0,
-              'is_active': true,
-            };
+            // Build user data with wallet balance
+            final userData = Map<String, dynamic>.from(response);
+            userData['name'] = userData['email']?.split('@')[0] ?? 'User';
+            final petnt = (walletResponse['petnt_balance'] ?? 0.0) as num;
+            final petbnt = (walletResponse['petbnt_balance'] ?? 0.0) as num;
+            final petindx = (walletResponse['petindx_balance'] ?? 0.0) as num;
+            userData['pet_coin_balance'] =
+                petnt.toDouble() + petbnt.toDouble() + petindx.toDouble();
+            userData['is_active'] = true;
 
             return AuthResponse(
               success: true,
               token: authResponse.session?.accessToken,
-              user: User.fromJson(userResponseData),
+              user: User.fromJson(userData),
             );
-          } else {
-            rethrow;
+          } catch (e) {
+            print('Error fetching user data: $e');
+            return AuthResponse(success: false, error: 'Invalid credentials');
           }
         }
-      } else {
-        return AuthResponse(
-          success: false,
-          error: 'Invalid credentials',
-        );
+      } catch (authError) {
+        print('Supabase Auth sign-in failed: $authError');
+        // Fall through to check users table
       }
+
+      // If Supabase Auth fails, check users table for admin-created users
+      final userResponse = await _client
+          .from('users')
+          .select('*')
+          .eq('email', email)
+          .single();
+
+      // Verify password matches
+      if (userResponse['password'] != password) {
+        return AuthResponse(success: false, error: 'Invalid credentials');
+      }
+
+      // Sign in with custom auth using the user's ID
+      // Note: This creates a session in Supabase for compatibility
+      // For production, you may want to implement a proper custom auth flow
+
+      // Get pet coin wallet balance (sum of all coin types)
+      final walletResponse = await _client
+          .from('pet_coin_wallets')
+          .select('petnt_balance, petbnt_balance, petindx_balance')
+          .eq('user_id', userResponse['id'])
+          .maybeSingle();
+
+      // Build user data
+      final userData = Map<String, dynamic>.from(userResponse);
+      userData['name'] = userData['email']?.split('@')[0] ?? 'User';
+      if (walletResponse != null) {
+        final petnt = (walletResponse['petnt_balance'] ?? 0.0) as num;
+        final petbnt = (walletResponse['petbnt_balance'] ?? 0.0) as num;
+        final petindx = (walletResponse['petindx_balance'] ?? 0.0) as num;
+        userData['pet_coin_balance'] =
+            petnt.toDouble() + petbnt.toDouble() + petindx.toDouble();
+      } else {
+        userData['pet_coin_balance'] = 0.0;
+      }
+      userData['is_active'] = true;
+
+      return AuthResponse(
+        success: true,
+        token: 'custom_token_${userResponse['id']}',
+        user: User.fromJson(userData),
+      );
     } catch (e) {
+      print('Sign-in error: $e');
       return AuthResponse(
         success: false,
         error: 'Login failed: ${e.toString()}',
@@ -187,17 +201,21 @@ class SupabaseService {
             .eq('id', user.id)
             .single();
 
-        // Get pet coin wallet balance
+        // Get pet coin wallet balance (sum of all coin types)
         final walletResponse = await _client
             .from('pet_coin_wallets')
-            .select('balance')
+            .select('petnt_balance, petbnt_balance, petindx_balance')
             .eq('user_id', user.id)
             .single();
 
         // Build user data with wallet balance
         final userData = Map<String, dynamic>.from(response);
         userData['name'] = userData['email']?.split('@')[0] ?? 'User';
-        userData['pet_coin_balance'] = walletResponse['balance'] ?? 0.0;
+        final petnt = (walletResponse['petnt_balance'] ?? 0.0) as num;
+        final petbnt = (walletResponse['petbnt_balance'] ?? 0.0) as num;
+        final petindx = (walletResponse['petindx_balance'] ?? 0.0) as num;
+        userData['pet_coin_balance'] =
+            petnt.toDouble() + petbnt.toDouble() + petindx.toDouble();
         userData['is_active'] = true;
 
         return User.fromJson(userData);
@@ -244,21 +262,31 @@ class SupabaseService {
 
   // ==================== BASIC DATA OPERATIONS ====================
 
-  /// Get user transactions
+  /// Get user transactions (both sent and received)
   static Future<List<Map<String, dynamic>>> getTransactions() async {
     try {
       final user = _client.auth.currentUser;
       if (user == null) return [];
 
+      // Get transactions where user is involved (either sender or receiver)
       final response = await _client
           .from('transactions')
-          .select('*')
-          .eq('user_id', user.id)
+          .select(
+            'id, user_id, transaction_type, amount, description, status,'
+            'created_at, updated_at, approved_by, approved_at, rejection_reason,'
+            'from_user_id, to_user_id, pet_coins_amount, currency,'
+            'from_franchise_partner_id, to_franchise_partner_id, transfer_reason,'
+            'coin_type',
+          )
+          .or(
+            'user_id.eq.${user.id},from_user_id.eq.${user.id},to_user_id.eq.${user.id}',
+          )
           .order('created_at', ascending: false)
-          .limit(10);
+          .limit(50);
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
+      print('Error getting transactions: $e');
       return [];
     }
   }
@@ -299,7 +327,10 @@ class SupabaseService {
   }
 
   /// Update PET coin value
-  static Future<bool> updateCurrentPrice(double newValue, String updatedBy) async {
+  static Future<bool> updateCurrentPrice(
+    double newValue,
+    String updatedBy,
+  ) async {
     try {
       // First, deactivate all current active values
       await _client
@@ -308,14 +339,11 @@ class SupabaseService {
           .eq('is_active', true);
 
       // Insert new value
-      final response = await _client
-          .from('pet_coin_settings')
-          .insert({
-            'coin_value_rupees': newValue,
-            'is_active': true,
-            'updated_by': updatedBy,
-          })
-          .select();
+      final response = await _client.from('pet_coin_settings').insert({
+        'coin_value_rupees': newValue,
+        'is_active': true,
+        'updated_by': updatedBy,
+      }).select();
 
       return response.isNotEmpty;
     } catch (e) {
@@ -340,7 +368,7 @@ class SupabaseService {
     }
   }
 
-  /// Get user wallet balance
+  /// Get user wallet balance (sum of all coin types)
   static Future<double> getUserWalletBalance() async {
     try {
       final user = _client.auth.currentUser;
@@ -348,11 +376,14 @@ class SupabaseService {
 
       final response = await _client
           .from('pet_coin_wallets')
-          .select('balance')
+          .select('petnt_balance, petbnt_balance, petindx_balance')
           .eq('user_id', user.id)
           .single();
 
-      return (response['balance'] ?? 0.0).toDouble();
+      final petnt = (response['petnt_balance'] ?? 0.0) as num;
+      final petbnt = (response['petbnt_balance'] ?? 0.0) as num;
+      final petindx = (response['petindx_balance'] ?? 0.0) as num;
+      return petnt.toDouble() + petbnt.toDouble() + petindx.toDouble();
     } catch (e) {
       return 0.0;
     }

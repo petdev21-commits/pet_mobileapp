@@ -7,7 +7,7 @@ import '../signin.dart';
 
 class UserManagementPage extends StatefulWidget {
   final String? initialSearchQuery;
-  
+
   const UserManagementPage({super.key, this.initialSearchQuery});
 
   @override
@@ -22,7 +22,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
   int totalUsers = 0;
   int customerCount = 0;
   int partnerCount = 0;
-  
+
   // Search functionality
   String searchQuery = '';
   List<SearchResult> searchResults = [];
@@ -37,9 +37,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
     super.initState();
     loadUserData();
     loadUsers();
-    
+
     // If there's an initial search query, perform the search
-    if (widget.initialSearchQuery != null && widget.initialSearchQuery!.isNotEmpty) {
+    if (widget.initialSearchQuery != null &&
+        widget.initialSearchQuery!.isNotEmpty) {
       _searchController.text = widget.initialSearchQuery!;
       handleSearch(widget.initialSearchQuery!);
     }
@@ -70,8 +71,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
     try {
       print('Loading users...');
       final result = await UserManagementService.getAllUsers();
-      print('Users result: ${result.users.length} users, error: ${result.error}');
-      
+      print(
+        'Users result: ${result.users.length} users, error: ${result.error}',
+      );
+
       if (result.error != null) {
         print('Error loading users: ${result.error}');
         ScaffoldMessenger.of(context).showSnackBar(
@@ -85,12 +88,14 @@ class _UserManagementPageState extends State<UserManagementPage> {
         });
         return;
       }
-      
+
       // Get user statistics
       print('Loading user statistics...');
       final stats = await UserManagementService.getUserStatistics();
-      print('Stats: total=${stats.totalUsers}, customers=${stats.customerCount}, partners=${stats.partnerCount}');
-      
+      print(
+        'Stats: total=${stats.totalUsers}, customers=${stats.customerCount}, partners=${stats.partnerCount}',
+      );
+
       setState(() {
         users = result.users;
         totalUsers = stats.totalUsers;
@@ -98,10 +103,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
         partnerCount = stats.partnerCount;
         isLoading = false;
       });
-      
+
       print('State updated: ${users.length} users loaded');
-      print('Statistics updated: total=$totalUsers, customers=$customerCount, partners=$partnerCount');
-      
+      print(
+        'Statistics updated: total=$totalUsers, customers=$customerCount, partners=$partnerCount',
+      );
+
       // If no users found, show a message
       if (users.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -148,7 +155,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
     // Debounce search by 300ms
     Future.delayed(const Duration(milliseconds: 300), () async {
-      if (searchQuery == query) { // Only proceed if query hasn't changed
+      if (searchQuery == query) {
+        // Only proceed if query hasn't changed
         setState(() {
           searchLoading = true;
         });
@@ -253,6 +261,174 @@ class _UserManagementPageState extends State<UserManagementPage> {
     });
   }
 
+  Future<void> _showChangeRoleDialog(
+    Map<String, dynamic> user,
+    String currentRole,
+  ) async {
+    // Default to franchise if current role is not one of the allowed roles
+    final allowedRoles = ['franchise', 'sub-franchise', 'channel_partner'];
+    String selectedRole = allowedRoles.contains(currentRole)
+        ? currentRole
+        : 'franchise';
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text('Change User Role'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // User info
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user['email'] ?? 'No email',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Current Role: ${UserManagementService.formatRole(currentRole)}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Role selector
+                DropdownButtonFormField<String>(
+                  value: selectedRole,
+                  decoration: const InputDecoration(
+                    labelText: 'Select New Role',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                  ),
+                  isExpanded: true,
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'franchise',
+                      child: Text('Franchise'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'sub-franchise',
+                      child: Text('Sub-Franchise'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'channel_partner',
+                      child: Text('Channel Partner'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setDialogState(() {
+                      selectedRole = value ?? currentRole;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (selectedRole != currentRole) {
+                  await _handleRoleChange(
+                    user['id'],
+                    user['email'],
+                    selectedRole,
+                  );
+                }
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B5CF6),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Update Role'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleRoleChange(
+    String userId,
+    String userEmail,
+    String newRole,
+  ) async {
+    try {
+      setState(() {
+        isLoading = true;
+      });
+
+      print('Updating role for email: $userEmail to $newRole');
+
+      // Update user role by email
+      final result = await UserManagementService.updateUserRoleByEmail(
+        userEmail,
+        newRole,
+      );
+
+      if (result.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Role updated for $userEmail to ${UserManagementService.formatRole(newRole)}!',
+            ),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+
+        // Refresh users list
+        await loadUsers();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating role: ${result.error}'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unexpected error: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+        ),
+      );
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
   Widget _buildSearchResultsCard() {
     return Container(
       width: double.infinity,
@@ -280,9 +456,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
               ),
-              border: Border(
-                bottom: BorderSide(color: Colors.grey[200]!),
-              ),
+              border: Border(bottom: BorderSide(color: Colors.grey[200]!)),
             ),
             child: Row(
               children: [
@@ -296,10 +470,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Center(
-                    child: Text(
-                      '🔍',
-                      style: TextStyle(fontSize: 20),
-                    ),
+                    child: Text('🔍', style: TextStyle(fontSize: 20)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -318,10 +489,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                       const SizedBox(height: 4),
                       Text(
                         '${searchResults.length} user${searchResults.length != 1 ? 's' : ''} found',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                       ),
                     ],
                   ),
@@ -329,7 +497,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 GestureDetector(
                   onTap: clearSearchResults,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
@@ -348,7 +519,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               ],
             ),
           ),
-          
+
           // Results Content
           Padding(
             padding: const EdgeInsets.all(20),
@@ -419,9 +590,18 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   DropdownMenuItem(value: 'customer', child: Text('Customer')),
                   DropdownMenuItem(value: 'merchant', child: Text('Merchant')),
                   DropdownMenuItem(value: 'partner', child: Text('Partner')),
-                  DropdownMenuItem(value: 'franchise', child: Text('Franchise')),
-                  DropdownMenuItem(value: 'sub-franchise', child: Text('Sub-Franchise')),
-                  DropdownMenuItem(value: 'channel_partner', child: Text('Channel Partner')),
+                  DropdownMenuItem(
+                    value: 'franchise',
+                    child: Text('Franchise'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'sub-franchise',
+                    child: Text('Sub-Franchise'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'channel_partner',
+                    child: Text('Channel Partner'),
+                  ),
                   DropdownMenuItem(value: 'bank', child: Text('Bank')),
                   DropdownMenuItem(value: 'admin', child: Text('Admin')),
                 ],
@@ -445,7 +625,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 role: selectedRole,
               );
 
-              final validation = UserManagementService.validateUserData(newUser);
+              final validation = UserManagementService.validateUserData(
+                newUser,
+              );
               if (validation != null) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
@@ -570,11 +752,16 @@ class _UserManagementPageState extends State<UserManagementPage> {
                             });
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF3F4F6),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                              border: Border.all(
+                                color: const Color(0xFFE5E7EB),
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -584,13 +771,19 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                   height: 32,
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
-                                      colors: [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+                                      colors: [
+                                        Color(0xFF8B5CF6),
+                                        Color(0xFF6366F1),
+                                      ],
                                     ),
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Center(
                                     child: Text(
-                                      currentUser?.name.substring(0, 1).toUpperCase() ?? 'S',
+                                      currentUser?.name
+                                              .substring(0, 1)
+                                              .toUpperCase() ??
+                                          'S',
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 14,
@@ -601,7 +794,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                 ),
                                 const SizedBox(width: 8),
                                 Icon(
-                                  dropdownOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                                  dropdownOpen
+                                      ? Icons.keyboard_arrow_up
+                                      : Icons.keyboard_arrow_down,
                                   color: const Color(0xFF6B7280),
                                   size: 16,
                                 ),
@@ -661,10 +856,22 @@ class _UserManagementPageState extends State<UserManagementPage> {
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                               children: [
-                                Text('Total: $totalUsers', style: const TextStyle(fontSize: 12)),
-                                Text('Customers: $customerCount', style: const TextStyle(fontSize: 12)),
-                                Text('Partners: $partnerCount', style: const TextStyle(fontSize: 12)),
-                                Text('Users: ${users.length}', style: const TextStyle(fontSize: 12)),
+                                Text(
+                                  'Total: $totalUsers',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                Text(
+                                  'Customers: $customerCount',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                Text(
+                                  'Partners: $partnerCount',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                Text(
+                                  'Users: ${users.length}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
                               ],
                             ),
                           ),
@@ -679,7 +886,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                           const SizedBox(height: 16),
 
                           // Conditional Content: Show search results OR all users
-                          if (showSearchResults) 
+                          if (showSearchResults)
                             _buildSearchResultsCard()
                           else
                             _buildAllUsersCard(),
@@ -729,7 +936,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
                       const SizedBox(height: 8),
                       // Role Badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF6366F1),
                           borderRadius: BorderRadius.circular(6),
@@ -745,10 +955,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                       ),
                       const SizedBox(height: 12),
                       // Divider
-                      Container(
-                        height: 1,
-                        color: const Color(0xFFE5E7EB),
-                      ),
+                      Container(height: 1, color: const Color(0xFFE5E7EB)),
                       const SizedBox(height: 12),
                       // Sign Out Button
                       GestureDetector(
@@ -811,11 +1018,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               color: color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 20,
-            ),
+            child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(height: 12),
           Text(
@@ -872,10 +1075,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 const SizedBox(height: 4),
                 Text(
                   'Create a user account with any role',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
               ],
             ),
@@ -940,83 +1140,79 @@ class _UserManagementPageState extends State<UserManagementPage> {
                     const SizedBox(height: 4),
                     Text(
                       '$totalUsers users in the system',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () async {
+                        print('Testing Supabase connection...');
+                        try {
+                          final result =
+                              await UserManagementService.getAllUsers();
+                          final stats =
+                              await UserManagementService.getUserStatistics();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Supabase Test: ${result.users.length} users, Stats: ${stats.totalUsers} total',
+                              ),
+                              backgroundColor: const Color(0xFF10B981),
+                            ),
+                          );
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Supabase Error: $e'),
+                              backgroundColor: const Color(0xFFEF4444),
+                            ),
+                          );
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.bug_report,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: loadUsers,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.refresh,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                                Row(
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () async {
-                                        print('Testing Supabase connection...');
-                                        try {
-                                          final result = await UserManagementService.getAllUsers();
-                                          final stats = await UserManagementService.getUserStatistics();
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('Supabase Test: ${result.users.length} users, Stats: ${stats.totalUsers} total'),
-                                              backgroundColor: const Color(0xFF10B981),
-                                            ),
-                                          );
-                                        } catch (e) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text('Supabase Error: $e'),
-                                              backgroundColor: const Color(0xFFEF4444),
-                                            ),
-                                          );
-                                        }
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF10B981),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: const Icon(
-                                          Icons.bug_report,
-                                          color: Colors.white,
-                                          size: 20,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    GestureDetector(
-                                      onTap: loadUsers,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF8B5CF6),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: const Icon(
-                                          Icons.refresh,
-                                          color: Colors.white,
-                                          size: 20,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
               ],
             ),
           ),
-          
+
           // Divider
-          Container(
-            height: 1,
-            color: const Color(0xFFE5E7EB),
-          ),
-          
+          Container(height: 1, color: const Color(0xFFE5E7EB)),
+
           // Content
           Padding(
             padding: const EdgeInsets.all(20),
-            child: isLoading
-                ? _buildLoadingState()
-                : _buildUsersList(),
+            child: isLoading ? _buildLoadingState() : _buildUsersList(),
           ),
         ],
       ),
@@ -1033,10 +1229,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
         const SizedBox(height: 16),
         Text(
           'Loading users...',
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey[600],
-          ),
+          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
         ),
       ],
     );
@@ -1044,15 +1237,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
   Widget _buildUsersList() {
     print('Building users list: ${users.length} users');
-    
+
     if (users.isEmpty) {
       return Column(
         children: [
-          Icon(
-            Icons.people_outline,
-            size: 48,
-            color: Colors.grey[400],
-          ),
+          Icon(Icons.people_outline, size: 48, color: Colors.grey[400]),
           const SizedBox(height: 16),
           Text(
             'No users found',
@@ -1065,10 +1254,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
           const SizedBox(height: 8),
           Text(
             'Users will appear here when they register',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[500],
-            ),
+            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
           ),
           const SizedBox(height: 16),
           Row(
@@ -1083,11 +1269,17 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   print('Testing service directly...');
                   try {
                     final result = await UserManagementService.getAllUsers();
-                    print('Direct service test: ${result.users.length} users, error: ${result.error}');
+                    print(
+                      'Direct service test: ${result.users.length} users, error: ${result.error}',
+                    );
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Service test: ${result.users.length} users found'),
-                        backgroundColor: result.error != null ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                        content: Text(
+                          'Service test: ${result.users.length} users found',
+                        ),
+                        backgroundColor: result.error != null
+                            ? const Color(0xFFEF4444)
+                            : const Color(0xFF10B981),
                       ),
                     );
                   } catch (e) {
@@ -1110,7 +1302,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
     return Column(
       children: users.map((user) {
-        print('Building user item: ${user['name'] ?? 'No name'} (${user['email'] ?? 'No email'})');
+        print(
+          'Building user item: ${user['name'] ?? 'No name'} (${user['email'] ?? 'No email'})',
+        );
         return _buildUserItem(user);
       }).toList(),
     );
@@ -1120,42 +1314,40 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final role = user['role'] ?? 'customer';
     final name = user['name'] ?? 'Unknown User';
     final email = user['email'] ?? 'No email';
-    
+
     print('Building user item for: $name ($email) - Role: $role');
-    
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
         children: [
           // User Avatar
           Container(
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: _getRoleColors(role),
-              ),
-              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(colors: _getRoleColors(role)),
+              borderRadius: BorderRadius.circular(18),
             ),
             child: Center(
               child: Text(
                 name.substring(0, 1).toUpperCase(),
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          
+          const SizedBox(width: 10),
+
           // User Info
           Expanded(
             child: Column(
@@ -1164,36 +1356,58 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 Text(
                   name,
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: Color(0xFF1F2937),
                   ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   email,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ],
             ),
           ),
-          
-          // Role Badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: _getRoleColors(role)[0].withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              UserManagementService.formatRole(role),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: _getRoleColors(role)[0],
+
+          const SizedBox(width: 8),
+
+          // Role Badge (now clickable)
+          GestureDetector(
+            onTap: () => _showChangeRoleDialog(user, role),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 120),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: _getRoleColors(role)[0].withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _getRoleColors(role)[0].withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      UserManagementService.formatRole(role),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: _getRoleColors(role)[0],
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.edit, size: 12, color: _getRoleColors(role)[0]),
+                ],
               ),
             ),
           ),
@@ -1237,10 +1451,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Center(
-                  child: Text(
-                    '🔍',
-                    style: TextStyle(fontSize: 20),
-                  ),
+                  child: Text('🔍', style: TextStyle(fontSize: 20)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1259,10 +1470,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                     SizedBox(height: 4),
                     Text(
                       'Find and filter users by role or email',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF64748B),
-                      ),
+                      style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
                     ),
                   ],
                 ),
@@ -1289,12 +1497,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
         const Text(
           'Filter by Role',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 15,
             fontWeight: FontWeight.w600,
             color: Color(0xFF1F2937),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Row(
           children: [
             Expanded(
@@ -1305,7 +1513,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 onTap: () => handleRoleFilter('customer'),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Expanded(
               child: _buildRoleButton(
                 icon: '🏢',
@@ -1316,7 +1524,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -1327,7 +1535,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 onTap: () => handleRoleFilter('sub-franchise'),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
             Expanded(
               child: _buildRoleButton(
                 icon: '🤝',
@@ -1351,7 +1559,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         decoration: BoxDecoration(
           color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(8),
@@ -1359,18 +1567,21 @@ class _UserManagementPageState extends State<UserManagementPage> {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              icon,
-              style: const TextStyle(fontSize: 16),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: color,
+            Text(icon, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+                textAlign: TextAlign.center,
               ),
             ),
           ],
@@ -1406,10 +1617,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               },
               decoration: InputDecoration(
                 hintText: 'Search by email or role...',
-                hintStyle: TextStyle(
-                  color: Colors.grey[500],
-                  fontSize: 14,
-                ),
+                hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                 prefixIcon: const Icon(
                   Icons.search,
                   color: Color(0xFF94A3B8),
@@ -1423,7 +1631,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
                           height: 16,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Color(0xFF3B82F6),
+                            ),
                           ),
                         ),
                       )
@@ -1438,7 +1648,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 2),
+                  borderSide: const BorderSide(
+                    color: Color(0xFF3B82F6),
+                    width: 2,
+                  ),
                 ),
                 filled: true,
                 fillColor: Colors.white,
@@ -1477,13 +1690,17 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                   height: 40,
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
-                                      colors: SearchService.getRoleColors(suggestion.role),
+                                      colors: SearchService.getRoleColors(
+                                        suggestion.role,
+                                      ),
                                     ),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Center(
                                     child: Text(
-                                      suggestion.email.substring(0, 1).toUpperCase(),
+                                      suggestion.email
+                                          .substring(0, 1)
+                                          .toUpperCase(),
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 16,
@@ -1496,7 +1713,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                 // Content
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         suggestion.email,
@@ -1509,7 +1727,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        SearchService.formatRole(suggestion.role),
+                                        SearchService.formatRole(
+                                          suggestion.role,
+                                        ),
                                         style: TextStyle(
                                           fontSize: 12,
                                           color: Colors.grey[600],
@@ -1520,9 +1740,14 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                 ),
                                 // Role Badge
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: SearchService.getRoleColors(suggestion.role)[0].withOpacity(0.1),
+                                    color: SearchService.getRoleColors(
+                                      suggestion.role,
+                                    )[0].withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Text(
@@ -1530,7 +1755,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                     style: TextStyle(
                                       fontSize: 10,
                                       fontWeight: FontWeight.w600,
-                                      color: SearchService.getRoleColors(suggestion.role)[0],
+                                      color: SearchService.getRoleColors(
+                                        suggestion.role,
+                                      )[0],
                                     ),
                                   ),
                                 ),
@@ -1549,7 +1776,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
     );
   }
 
-
   Widget _buildEmptySearchResults() {
     return Column(
       children: [
@@ -1561,10 +1787,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
             borderRadius: BorderRadius.circular(24),
           ),
           child: const Center(
-            child: Text(
-              '🔍',
-              style: TextStyle(fontSize: 24),
-            ),
+            child: Text('🔍', style: TextStyle(fontSize: 24)),
           ),
         ),
         const SizedBox(height: 12),
@@ -1579,10 +1802,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
         const SizedBox(height: 4),
         Text(
           'Try a different search term',
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[500],
-          ),
+          style: TextStyle(fontSize: 12, color: Colors.grey[500]),
         ),
       ],
     );
@@ -1590,7 +1810,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
   Widget _buildSearchResultsList() {
     return Column(
-      children: searchResults.map((result) => _buildSearchResultItem(result)).toList(),
+      children: searchResults
+          .map((result) => _buildSearchResultItem(result))
+          .toList(),
     );
   }
 
@@ -1636,7 +1858,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 ),
               ),
               const SizedBox(width: 16),
-              
+
               // Content
               Expanded(
                 child: Column(
@@ -1664,12 +1886,19 @@ class _UserManagementPageState extends State<UserManagementPage> {
                         const SizedBox(width: 8),
                         // Role Badge
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: SearchService.getRoleColors(result.role)[0].withOpacity(0.1),
+                            color: SearchService.getRoleColors(
+                              result.role,
+                            )[0].withOpacity(0.1),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: SearchService.getRoleColors(result.role)[0].withOpacity(0.3),
+                              color: SearchService.getRoleColors(
+                                result.role,
+                              )[0].withOpacity(0.3),
                             ),
                           ),
                           child: Text(
@@ -1677,7 +1906,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: SearchService.getRoleColors(result.role)[0],
+                              color: SearchService.getRoleColors(
+                                result.role,
+                              )[0],
                             ),
                           ),
                         ),
@@ -1689,7 +1920,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
             ],
           ),
           const SizedBox(height: 12),
-          
+
           // Member since info
           Row(
             children: [
@@ -1704,15 +1935,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
               const SizedBox(width: 8),
               Text(
                 'Member since ${SearchService.formatDate(result.createdAt)}',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[500],
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey[500]),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          
+
           // View User Details Button
           SizedBox(
             width: double.infinity,

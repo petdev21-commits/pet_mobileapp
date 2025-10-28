@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/pet_coin_value_service.dart';
+import '../services/coin_types_service.dart';
 import '../models/user.dart';
 import '../signin.dart';
 
@@ -20,18 +21,117 @@ class _CoinValuePageState extends State<CoinValuePage> {
   final TextEditingController _newValueController = TextEditingController();
   List<PetCoinValue> valueHistory = [];
 
+  // Multi-coin state
+  List<Map<String, dynamic>> coinTypes = [];
+  String selectedCoinType = 'petNT';
+  Map<String, double> coinPrices = {
+    'petNT': 90.00,
+    'petBNT': 1.00,
+    'petINDX': 0.50,
+  };
+  Map<String, TextEditingController> priceControllers = {};
+
   @override
   void initState() {
     super.initState();
     loadUserData();
-    loadCurrentValue();
+    _initializeControllers();
+    loadCoinTypes();
+    loadCurrentValue(); // Keep for backwards compatibility
     loadValueHistory();
+  }
+
+  void _initializeControllers() {
+    priceControllers['petNT'] = TextEditingController(text: '90.00');
+    priceControllers['petBNT'] = TextEditingController(text: '1.00');
+    priceControllers['petINDX'] = TextEditingController(text: '0.50');
   }
 
   @override
   void dispose() {
     _newValueController.dispose();
+    priceControllers.values.forEach((controller) => controller.dispose());
     super.dispose();
+  }
+
+  Future<void> loadCoinTypes() async {
+    try {
+      final coins = await CoinTypesService.getActiveCoinTypes();
+      setState(() {
+        coinTypes = coins;
+        for (var coin in coins) {
+          final typeName = coin['type_name'] as String;
+          final price = (coin['current_price_rupees'] as num).toDouble();
+          coinPrices[typeName] = price;
+          if (priceControllers[typeName] != null) {
+            priceControllers[typeName]!.text = price.toString();
+          }
+        }
+      });
+    } catch (e) {
+      print('Error loading coin types: $e');
+    }
+  }
+
+  Future<void> updateCoinPrice(String coinType) async {
+    final controller = priceControllers[coinType];
+    if (controller == null) return;
+
+    final newValue = double.tryParse(controller.text);
+    if (newValue == null || newValue <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid positive number'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+      return;
+    }
+
+    if (currentUser == null) return;
+
+    setState(() {
+      isUpdating = true;
+    });
+
+    try {
+      final result = await CoinTypesService.updateCoinPrice(
+        coinType,
+        newValue,
+        currentUser!.id,
+      );
+      if (result) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '$coinType price updated to ₹${newValue.toStringAsFixed(2)}',
+            ),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
+        setState(() {
+          coinPrices[coinType] = newValue;
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error updating coin price'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+        ),
+      );
+    } finally {
+      setState(() {
+        isUpdating = false;
+      });
+    }
   }
 
   Future<void> loadUserData() async {
@@ -118,11 +218,16 @@ class _CoinValuePageState extends State<CoinValuePage> {
     });
 
     try {
-      final result = await PetCoinValueService.updateValue(newValue, currentUser!.id);
+      final result = await PetCoinValueService.updateValue(
+        newValue,
+        currentUser!.id,
+      );
       if (result.success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('PET Coin value updated to ${PetCoinValueService.formatCurrency(newValue)}'),
+            content: Text(
+              'PET Coin value updated to ${PetCoinValueService.formatCurrency(newValue)}',
+            ),
             backgroundColor: const Color(0xFF10B981),
           ),
         );
@@ -166,10 +271,7 @@ class _CoinValuePageState extends State<CoinValuePage> {
               const SizedBox(height: 16),
               Text(
                 'Loading...',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
               ),
             ],
           ),
@@ -258,11 +360,16 @@ class _CoinValuePageState extends State<CoinValuePage> {
                             });
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF3F4F6),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                              border: Border.all(
+                                color: const Color(0xFFE5E7EB),
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -272,13 +379,19 @@ class _CoinValuePageState extends State<CoinValuePage> {
                                   height: 32,
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
-                                      colors: [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+                                      colors: [
+                                        Color(0xFF8B5CF6),
+                                        Color(0xFF6366F1),
+                                      ],
                                     ),
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Center(
                                     child: Text(
-                                      currentUser?.name.substring(0, 1).toUpperCase() ?? 'S',
+                                      currentUser?.name
+                                              .substring(0, 1)
+                                              .toUpperCase() ??
+                                          'S',
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 14,
@@ -289,7 +402,9 @@ class _CoinValuePageState extends State<CoinValuePage> {
                                 ),
                                 const SizedBox(width: 8),
                                 Icon(
-                                  dropdownOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                                  dropdownOpen
+                                      ? Icons.keyboard_arrow_up
+                                      : Icons.keyboard_arrow_down,
                                   color: const Color(0xFF6B7280),
                                   size: 16,
                                 ),
@@ -307,11 +422,11 @@ class _CoinValuePageState extends State<CoinValuePage> {
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         children: [
-                          // Current Value Card
-                          _buildCurrentValueCard(),
+                          // Multi-Coin Value Cards
+                          _buildMultiCoinValueCards(),
                           const SizedBox(height: 24),
 
-                          // Value History Card
+                          // Value History Card (keep for now for backwards compatibility)
                           _buildValueHistoryCard(),
                         ],
                       ),
@@ -359,7 +474,10 @@ class _CoinValuePageState extends State<CoinValuePage> {
                       const SizedBox(height: 8),
                       // Role Badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF6366F1),
                           borderRadius: BorderRadius.circular(6),
@@ -375,10 +493,7 @@ class _CoinValuePageState extends State<CoinValuePage> {
                       ),
                       const SizedBox(height: 12),
                       // Divider
-                      Container(
-                        height: 1,
-                        color: const Color(0xFFE5E7EB),
-                      ),
+                      Container(height: 1, color: const Color(0xFFE5E7EB)),
                       const SizedBox(height: 12),
                       // Sign Out Button
                       GestureDetector(
@@ -412,10 +527,62 @@ class _CoinValuePageState extends State<CoinValuePage> {
     );
   }
 
-  Widget _buildCurrentValueCard() {
+  Widget _buildMultiCoinValueCards() {
+    final colors = {
+      'petNT': [const Color(0xFF3B82F6), const Color(0xFF2563EB)],
+      'petBNT': [const Color(0xFF10B981), const Color(0xFF059669)],
+      'petINDX': [const Color(0xFFF59E0B), const Color(0xFFD97706)],
+    };
+
+    final icons = {'petNT': '🔵', 'petBNT': '🟢', 'petINDX': '🟡'};
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Manage Coin Values',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF1F2937),
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Set exchange rates for all coin types',
+          style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+        ),
+        const SizedBox(height: 16),
+        ...coinPrices.entries.map((entry) {
+          final coinType = entry.key;
+          final price = entry.value;
+          final color = colors[coinType] ?? [Colors.grey, Colors.grey[600]!];
+          final icon = icons[coinType] ?? '🪙';
+          final controller = priceControllers[coinType]!;
+
+          return _buildSingleCoinCard(
+            coinType,
+            price,
+            color[0],
+            color[1],
+            icon,
+            controller,
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildSingleCoinCard(
+    String coinType,
+    double currentPrice,
+    Color primaryColor,
+    Color secondaryColor,
+    String icon,
+    TextEditingController controller,
+  ) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -432,209 +599,170 @@ class _CoinValuePageState extends State<CoinValuePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Current PET Coin Value',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1F2937),
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Set the exchange rate for PET coins to Indian Rupees',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF64748B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF3C7),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Center(
-                  child: Text(
-                    '🪙',
-                    style: TextStyle(fontSize: 24),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Current Value Display
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFEF3C7), Color(0xFFFED7AA)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+              gradient: LinearGradient(colors: [primaryColor, secondaryColor]),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
               ),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFCD34D)),
             ),
-            child: Column(
+            child: Row(
               children: [
-                Text(
-                  PetCoinValueService.formatCurrency(currentValue?.coinValueRupees ?? 0.0),
-                  style: const TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF92400E),
+                Text(icon, style: const TextStyle(fontSize: 32)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        coinType.toUpperCase(),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Current Rate',
+                        style: TextStyle(fontSize: 12, color: Colors.white70),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'per PET Coin',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF92400E),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Last updated: ${currentValue != null ? PetCoinValueService.formatDateTime(currentValue!.updatedAt) : 'Never'}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFFB45309),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '₹${currentPrice.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 24),
-
-          // Update Form
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'New Value (₹)',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF374151),
+          // Input Section
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'New Price (₹)',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF374151),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _newValueController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  hintText: 'Enter new value',
-                  prefixText: '₹ ',
-                  prefixStyle: const TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF6B7280),
-                    fontWeight: FontWeight.w500,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
-                  ),
-                  filled: true,
-                  fillColor: Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Enter the amount in Indian Rupees that 1 PET coin should be worth',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // Update Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: isUpdating ? null : updatePetCoinValue,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF59E0B),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: controller,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: 'Enter new price',
+                    prefixText: '₹ ',
+                    prefixStyle: const TextStyle(
+                      fontSize: 16,
+                      color: Color(0xFF6B7280),
+                      fontWeight: FontWeight.w500,
                     ),
-                    elevation: 0,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: primaryColor, width: 2),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                   ),
-                  child: isUpdating
-                      ? const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Updating...',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        )
-                      : const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              '🪙',
-                              style: TextStyle(fontSize: 16),
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Update PET Coin Value',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: isUpdating
+                        ? null
+                        : () => updateCoinPrice(coinType),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: isUpdating
+                        ? const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Updating...',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.update, color: Colors.white, size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'Update Price',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
-
 
   Widget _buildValueHistoryCard() {
     return Container(
@@ -663,9 +791,7 @@ class _CoinValuePageState extends State<CoinValuePage> {
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
               ),
-              border: Border(
-                bottom: BorderSide(color: Color(0xFFE2E8F0)),
-              ),
+              border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -684,10 +810,7 @@ class _CoinValuePageState extends State<CoinValuePage> {
                     SizedBox(height: 4),
                     Text(
                       'Recent changes to PET coin value',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF64748B),
-                      ),
+                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                     ),
                   ],
                 ),
@@ -697,7 +820,10 @@ class _CoinValuePageState extends State<CoinValuePage> {
                     loadValueHistory();
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF6366F1),
                       borderRadius: BorderRadius.circular(8),
@@ -705,10 +831,7 @@ class _CoinValuePageState extends State<CoinValuePage> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          '🔄',
-                          style: TextStyle(fontSize: 14),
-                        ),
+                        Text('🔄', style: TextStyle(fontSize: 14)),
                         SizedBox(width: 4),
                         Text(
                           'Refresh',
@@ -725,7 +848,7 @@ class _CoinValuePageState extends State<CoinValuePage> {
               ],
             ),
           ),
-          
+
           // Content
           Padding(
             padding: const EdgeInsets.all(16),
@@ -741,10 +864,7 @@ class _CoinValuePageState extends State<CoinValuePage> {
                             borderRadius: BorderRadius.circular(32),
                           ),
                           child: const Center(
-                            child: Text(
-                              '📊',
-                              style: TextStyle(fontSize: 32),
-                            ),
+                            child: Text('📊', style: TextStyle(fontSize: 32)),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -772,7 +892,7 @@ class _CoinValuePageState extends State<CoinValuePage> {
                       final index = entry.key;
                       final historyItem = entry.value;
                       final isActive = historyItem.isActive;
-                      
+
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
                         padding: const EdgeInsets.all(16),
@@ -787,7 +907,9 @@ class _CoinValuePageState extends State<CoinValuePage> {
                               width: 32,
                               height: 32,
                               decoration: BoxDecoration(
-                                color: isActive ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9),
+                                color: isActive
+                                    ? const Color(0xFFDCFCE7)
+                                    : const Color(0xFFF1F5F9),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Center(
@@ -796,7 +918,9 @@ class _CoinValuePageState extends State<CoinValuePage> {
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
-                                    color: isActive ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                                    color: isActive
+                                        ? const Color(0xFF16A34A)
+                                        : const Color(0xFF64748B),
                                   ),
                                 ),
                               ),
@@ -809,7 +933,9 @@ class _CoinValuePageState extends State<CoinValuePage> {
                                   Row(
                                     children: [
                                       Text(
-                                        PetCoinValueService.formatCurrency(historyItem.coinValueRupees),
+                                        PetCoinValueService.formatCurrency(
+                                          historyItem.coinValueRupees,
+                                        ),
                                         style: const TextStyle(
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600,
@@ -819,10 +945,15 @@ class _CoinValuePageState extends State<CoinValuePage> {
                                       if (isActive) ...[
                                         const SizedBox(width: 8),
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
                                           decoration: BoxDecoration(
                                             color: const Color(0xFFDCFCE7),
-                                            borderRadius: BorderRadius.circular(12),
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
                                           ),
                                           child: const Text(
                                             'Current',
@@ -838,7 +969,9 @@ class _CoinValuePageState extends State<CoinValuePage> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    PetCoinValueService.formatDateTime(historyItem.updatedAt),
+                                    PetCoinValueService.formatDateTime(
+                                      historyItem.updatedAt,
+                                    ),
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey[600],
@@ -855,7 +988,9 @@ class _CoinValuePageState extends State<CoinValuePage> {
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w500,
-                                    color: isActive ? const Color(0xFF16A34A) : const Color(0xFF64748B),
+                                    color: isActive
+                                        ? const Color(0xFF16A34A)
+                                        : const Color(0xFF64748B),
                                   ),
                                 ),
                                 const SizedBox(height: 2),
@@ -878,5 +1013,4 @@ class _CoinValuePageState extends State<CoinValuePage> {
       ),
     );
   }
-
 }

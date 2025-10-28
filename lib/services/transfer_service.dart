@@ -65,12 +65,16 @@ class Transaction {
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
       approvedBy: json['approved_by'],
-      approvedAt: json['approved_at'] != null ? DateTime.parse(json['approved_at']) : null,
+      approvedAt: json['approved_at'] != null
+          ? DateTime.parse(json['approved_at'])
+          : null,
       rejectionReason: json['rejection_reason'],
       userEmail: json['user_email'],
       fromUserId: json['from_user_id'],
       toUserId: json['to_user_id'],
-      petCoinsAmount: json['pet_coins_amount'] != null ? (json['pet_coins_amount'] as num).toDouble() : null,
+      petCoinsAmount: json['pet_coins_amount'] != null
+          ? (json['pet_coins_amount'] as num).toDouble()
+          : null,
       fromFranchisePartnerId: json['from_franchise_partner_id'],
       toFranchisePartnerId: json['to_franchise_partner_id'],
       transferReason: json['transfer_reason'],
@@ -86,7 +90,8 @@ class TransferService {
   static supabase.SupabaseClient get _client => SupabaseConfig.client;
 
   /// Get pending PET coin transfer transactions
-  static Future<({List<Transaction> transactions, String? error})> getPendingTransactions() async {
+  static Future<({List<Transaction> transactions, String? error})>
+  getPendingTransactions() async {
     try {
       // Get only PET coin transfer transactions
       final response = await _client
@@ -103,13 +108,18 @@ class TransferService {
       // Get all unique user IDs from transactions
       final allUserIds = <String>{};
       final allFranchiseIds = <String>{};
-      
+
       for (var transaction in response) {
-        if (transaction['user_id'] != null) allUserIds.add(transaction['user_id']);
-        if (transaction['from_user_id'] != null) allUserIds.add(transaction['from_user_id']);
-        if (transaction['to_user_id'] != null) allUserIds.add(transaction['to_user_id']);
-        if (transaction['from_franchise_partner_id'] != null) allFranchiseIds.add(transaction['from_franchise_partner_id']);
-        if (transaction['to_franchise_partner_id'] != null) allFranchiseIds.add(transaction['to_franchise_partner_id']);
+        if (transaction['user_id'] != null)
+          allUserIds.add(transaction['user_id']);
+        if (transaction['from_user_id'] != null)
+          allUserIds.add(transaction['from_user_id']);
+        if (transaction['to_user_id'] != null)
+          allUserIds.add(transaction['to_user_id']);
+        if (transaction['from_franchise_partner_id'] != null)
+          allFranchiseIds.add(transaction['from_franchise_partner_id']);
+        if (transaction['to_franchise_partner_id'] != null)
+          allFranchiseIds.add(transaction['to_franchise_partner_id']);
       }
 
       // Fetch all users in one query
@@ -120,7 +130,7 @@ class TransferService {
               .from('users')
               .select('id, email')
               .inFilter('id', allUserIds.toList());
-          
+
           for (var user in usersResponse) {
             userEmailMap[user['id']] = user['email'];
           }
@@ -137,7 +147,7 @@ class TransferService {
               .from('franchise_partners')
               .select('id, name')
               .inFilter('id', allFranchiseIds.toList());
-          
+
           for (var partner in franchiseResponse) {
             franchiseNameMap[partner['id']] = partner['name'];
           }
@@ -149,58 +159,66 @@ class TransferService {
       // Combine transactions with all related data
       final transactionsWithData = response.map((transaction) {
         final transactionData = Map<String, dynamic>.from(transaction);
-        transactionData['user_email'] = userEmailMap[transaction['user_id']] ?? 'Unknown';
-        transactionData['from_user_email'] = transaction['from_user_id'] != null 
-            ? userEmailMap[transaction['from_user_id']] ?? 'Unknown' 
+        transactionData['user_email'] =
+            userEmailMap[transaction['user_id']] ?? 'Unknown';
+        transactionData['from_user_email'] = transaction['from_user_id'] != null
+            ? userEmailMap[transaction['from_user_id']] ?? 'Unknown'
             : null;
-        transactionData['to_user_email'] = transaction['to_user_id'] != null 
-            ? userEmailMap[transaction['to_user_id']] ?? 'Unknown' 
+        transactionData['to_user_email'] = transaction['to_user_id'] != null
+            ? userEmailMap[transaction['to_user_id']] ?? 'Unknown'
             : null;
-        transactionData['from_franchise_partner_name'] = transaction['from_franchise_partner_id'] != null 
-            ? franchiseNameMap[transaction['from_franchise_partner_id']] ?? 'Unknown' 
+        transactionData['from_franchise_partner_name'] =
+            transaction['from_franchise_partner_id'] != null
+            ? franchiseNameMap[transaction['from_franchise_partner_id']] ??
+                  'Unknown'
             : null;
-        transactionData['to_franchise_partner_name'] = transaction['to_franchise_partner_id'] != null 
-            ? franchiseNameMap[transaction['to_franchise_partner_id']] ?? 'Unknown' 
+        transactionData['to_franchise_partner_name'] =
+            transaction['to_franchise_partner_id'] != null
+            ? franchiseNameMap[transaction['to_franchise_partner_id']] ??
+                  'Unknown'
             : null;
-        
+
         return Transaction.fromJson(transactionData);
       }).toList();
 
       return (transactions: transactionsWithData, error: null);
     } catch (e) {
       print('Error fetching pending transactions: $e');
-      return (
-        transactions: <Transaction>[],
-        error: e.toString()
-      );
+      return (transactions: <Transaction>[], error: e.toString());
     }
   }
 
   /// Approve a transaction
-  static Future<({bool success, String? error})> approveTransaction(String transactionId, String adminUserId) async {
+  static Future<({bool success, String? error})> approveTransaction(
+    String transactionId,
+    String adminUserId,
+  ) async {
     try {
       // Use the database function to atomically transfer coins and approve transaction
-      final response = await _client.rpc('transfer_pet_coins_and_approve', params: {
-        'transaction_id': transactionId,
-        'admin_user_id': adminUserId,
-      });
+      final response = await _client.rpc(
+        'transfer_pet_coins_and_approve',
+        params: {'transaction_id': transactionId, 'admin_user_id': adminUserId},
+      );
 
       if (response == null) {
-        return (success: false, error: 'Transaction approval failed - no data returned');
+        return (
+          success: false,
+          error: 'Transaction approval failed - no data returned',
+        );
       }
 
       return (success: true, error: null);
     } catch (e) {
       print('Error approving transaction: $e');
-      return (
-        success: false,
-        error: e.toString()
-      );
+      return (success: false, error: e.toString());
     }
   }
 
   /// Reject a transaction
-  static Future<({bool success, String? error})> rejectTransaction(String transactionId, String reason) async {
+  static Future<({bool success, String? error})> rejectTransaction(
+    String transactionId,
+    String reason,
+  ) async {
     try {
       final response = await _client
           .from('transactions')
@@ -219,19 +237,113 @@ class TransferService {
       return (success: true, error: null);
     } catch (e) {
       print('Error rejecting transaction: $e');
+      return (success: false, error: e.toString());
+    }
+  }
+
+  /// Create a pending transfer transaction
+  static Future<({bool success, String? error, String? transactionId})>
+  createPendingTransfer({
+    required String fromUserId,
+    required String toUserId,
+    required double petCoinsAmount,
+    String description = 'PET Coin transfer',
+    String? coinType, // Add coin type parameter
+  }) async {
+    try {
+      // Calculate amount in rupees
+      final petCoinValue = await _client
+          .from('pet_coin_settings')
+          .select('coin_value_rupees')
+          .eq('is_active', true)
+          .order('updated_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      final coinValueInRupees =
+          (petCoinValue?['coin_value_rupees'] ?? 1.0) as num;
+      final amountInRupees = petCoinsAmount * coinValueInRupees.toDouble();
+
+      // Check sender's balance for the specific coin type
+      final senderWallet = await _client
+          .from('pet_coin_wallets')
+          .select('petnt_balance, petbnt_balance, petindx_balance')
+          .eq('user_id', fromUserId)
+          .maybeSingle();
+
+      if (senderWallet == null) {
+        return (
+          success: false,
+          error: 'Sender wallet not found',
+          transactionId: null,
+        );
+      }
+
+      // Get the specific coin type balance
+      double senderBalance = 0.0;
+      switch (coinType) {
+        case 'petNT':
+          senderBalance =
+              (senderWallet['petnt_balance'] as num?)?.toDouble() ?? 0.0;
+          break;
+        case 'petBNT':
+          senderBalance =
+              (senderWallet['petbnt_balance'] as num?)?.toDouble() ?? 0.0;
+          break;
+        case 'petINDX':
+          senderBalance =
+              (senderWallet['petindx_balance'] as num?)?.toDouble() ?? 0.0;
+          break;
+        default:
+          senderBalance =
+              (senderWallet['petnt_balance'] as num?)?.toDouble() ?? 0.0;
+      }
+      if (senderBalance < petCoinsAmount) {
+        return (
+          success: false,
+          error: 'Insufficient balance',
+          transactionId: null,
+        );
+      }
+
+      // Create pending transaction
+      final response = await _client
+          .from('transactions')
+          .insert({
+            'user_id': fromUserId,
+            'from_user_id': fromUserId,
+            'to_user_id': toUserId,
+            'amount': amountInRupees,
+            'currency': 'INR',
+            'description': description,
+            'status': 'pending',
+            'transaction_type': 'pet_coin_transfer',
+            'pet_coins_amount': petCoinsAmount,
+            'transfer_reason': description,
+            'coin_type': coinType, // Store coin type
+          })
+          .select('id')
+          .single();
+
       return (
-        success: false,
-        error: e.toString()
+        success: true,
+        error: null,
+        transactionId: response['id'] as String,
       );
+    } catch (e) {
+      print('Error creating pending transfer: $e');
+      return (success: false, error: e.toString(), transactionId: null);
     }
   }
 
   /// Get wallet balance for a user
-  static Future<({double balance, String? error})> getWalletBalance(String userId) async {
+  static Future<({double balance, String? error})> getWalletBalance(
+    String userId,
+  ) async {
     try {
       final response = await _client
           .from('pet_coin_wallets')
-          .select('balance')
+          .select('petnt_balance, petbnt_balance, petindx_balance')
           .eq('user_id', userId)
           .maybeSingle();
 
@@ -239,13 +351,14 @@ class TransferService {
         return (balance: 0.0, error: null);
       }
 
-      return (balance: (response['balance'] as num).toDouble(), error: null);
+      final petnt = (response['petnt_balance'] as num?)?.toDouble() ?? 0.0;
+      final petbnt = (response['petbnt_balance'] as num?)?.toDouble() ?? 0.0;
+      final petindx = (response['petindx_balance'] as num?)?.toDouble() ?? 0.0;
+
+      return (balance: petnt + petbnt + petindx, error: null);
     } catch (e) {
       print('Error fetching wallet balance: $e');
-      return (
-        balance: 0.0,
-        error: e.toString()
-      );
+      return (balance: 0.0, error: e.toString());
     }
   }
 
@@ -270,13 +383,23 @@ class TransferService {
   /// Format date for display
   static String formatDateTime(DateTime dateTime) {
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
-    
+
     final now = DateTime.now();
     final difference = now.difference(dateTime);
-    
+
     if (difference.inDays == 0) {
       return 'Today ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
     } else if (difference.inDays == 1) {

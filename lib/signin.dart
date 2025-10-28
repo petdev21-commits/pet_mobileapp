@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'signup.dart';
 import 'services/auth_service.dart';
-import 'models/user.dart';
 import 'Dashboard/admin.dart';
 import 'Dashboard/customer.dart';
+import 'Dashboard/business_dashboard.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
@@ -46,14 +46,26 @@ class _SignInPageState extends State<SignInPage> {
             backgroundColor: Colors.green,
           ),
         );
-        
+
         // Navigate to appropriate dashboard based on user role
-        if (response.user?.role == 'admin') {
+        final role = response.user?.role ?? '';
+        final userRole = role.toLowerCase();
+
+        if (userRole == 'admin') {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const AdminDashboard()),
           );
+        } else if (userRole == 'franchise' ||
+            userRole == 'channel_partner' ||
+            userRole == 'sub-franchise') {
+          // Business roles get business dashboard with same features as customer
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const BusinessDashboard()),
+          );
         } else {
+          // Customer and other roles go to customer dashboard
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const CustomerDashboard()),
@@ -103,7 +115,7 @@ class _SignInPageState extends State<SignInPage> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Create account link
               GestureDetector(
                 onTap: () {
@@ -133,7 +145,7 @@ class _SignInPageState extends State<SignInPage> {
                 ),
               ),
               const SizedBox(height: 32),
-              
+
               // Form
               Form(
                 key: _formKey,
@@ -143,7 +155,9 @@ class _SignInPageState extends State<SignInPage> {
                     Container(
                       decoration: BoxDecoration(
                         color: const Color(0xFFF9FAFB), // Light grey background
-                        border: Border.all(color: const Color(0xFFE5E7EB)), // Light gray border
+                        border: Border.all(
+                          color: const Color(0xFFE5E7EB),
+                        ), // Light gray border
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Column(
@@ -156,7 +170,9 @@ class _SignInPageState extends State<SignInPage> {
                               if (value == null || value.isEmpty) {
                                 return 'Please enter your email';
                               }
-                              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                              if (!RegExp(
+                                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                              ).hasMatch(value)) {
                                 return 'Please enter a valid email';
                               }
                               return null;
@@ -212,7 +228,7 @@ class _SignInPageState extends State<SignInPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // Sign in button
               SizedBox(
                 width: double.infinity,
@@ -233,7 +249,9 @@ class _SignInPageState extends State<SignInPage> {
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : const Text(

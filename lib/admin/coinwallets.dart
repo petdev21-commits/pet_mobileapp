@@ -23,8 +23,25 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
   String selectedUserId = '';
   bool isTransferring = false;
   String userSearchQuery = '';
-  final TextEditingController _transferAmountController = TextEditingController();
+  String selectedCoinType = 'petNT'; // Default coin type
+  final TextEditingController _transferAmountController =
+      TextEditingController();
   final TextEditingController _userSearchController = TextEditingController();
+
+  // Coin type configurations
+  final Map<String, Map<String, dynamic>> coinTypes = {
+    'petNT': {'name': 'PET NT', 'icon': '🔵', 'color': const Color(0xFF3B82F6)},
+    'petBNT': {
+      'name': 'PET BNT',
+      'icon': '🟢',
+      'color': const Color(0xFF10B981),
+    },
+    'petINDX': {
+      'name': 'PET INDX',
+      'icon': '🟡',
+      'color': const Color(0xFFF59E0B),
+    },
+  };
 
   @override
   void initState() {
@@ -60,15 +77,15 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
     try {
       // First, get all users to ensure we have wallets for everyone
       final allUsers = await SupabaseService.getAllUsers();
-      
+
       // Ensure all users have wallets
       for (var user in allUsers) {
         await PetCoinWalletService.createWalletForUser(user['id']);
       }
-      
+
       // Now fetch all wallets
       final result = await PetCoinWalletService.getAllWallets();
-      
+
       setState(() {
         wallets = result.wallets;
         isLoading = false;
@@ -133,16 +150,21 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
         orElse: () => wallets.first,
       );
 
-      final result = await PetCoinWalletService.transferCoins(
+      // Transfer using the selected coin type
+      final result = await PetCoinWalletService.transferCoinsByType(
         companyWallet.userId,
         selectedUserId,
         amount,
+        selectedCoinType,
       );
 
       if (result.success) {
+        final coinName = coinTypes[selectedCoinType]!['name'] as String;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Successfully transferred ${PetCoinWalletService.formatCoins(amount)} PET coins!'),
+            content: Text(
+              'Successfully transferred ${PetCoinWalletService.formatCoins(amount)} $coinName!',
+            ),
             backgroundColor: const Color(0xFF10B981),
           ),
         );
@@ -152,6 +174,7 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
           userSearchQuery = '';
           _userSearchController.clear();
           showTransferForm = false;
+          selectedCoinType = 'petNT'; // Reset to default
         });
         // Refresh data
         loadWallets();
@@ -178,20 +201,20 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
     }
   }
 
-  List<PetCoinWallet> get customerWallets {
-    return wallets.where((w) => w.userRole == 'customer').toList();
+  List<PetCoinWallet> get allUserWallets {
+    // Return all users except company wallet
+    return wallets.where((w) => w.userRole != 'company').toList();
   }
 
   List<PetCoinWallet> get filteredUsers {
-    if (userSearchQuery.trim().isEmpty) return customerWallets;
-    
+    if (userSearchQuery.trim().isEmpty) return allUserWallets;
+
     final query = userSearchQuery.toLowerCase();
-    return customerWallets.where((wallet) {
+    return allUserWallets.where((wallet) {
       return (wallet.userEmail?.toLowerCase().contains(query) ?? false) ||
-             (wallet.userRole?.toLowerCase().contains(query) ?? false);
+          (wallet.userRole?.toLowerCase().contains(query) ?? false);
     }).toList();
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -209,10 +232,7 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
               const SizedBox(height: 16),
               Text(
                 'Loading wallet data...',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
               ),
             ],
           ),
@@ -301,11 +321,16 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                             });
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF3F4F6),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFE5E7EB)),
+                              border: Border.all(
+                                color: const Color(0xFFE5E7EB),
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -315,13 +340,19 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                                   height: 32,
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
-                                      colors: [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+                                      colors: [
+                                        Color(0xFF8B5CF6),
+                                        Color(0xFF6366F1),
+                                      ],
                                     ),
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Center(
                                     child: Text(
-                                      currentUser?.name.substring(0, 1).toUpperCase() ?? 'S',
+                                      currentUser?.name
+                                              .substring(0, 1)
+                                              .toUpperCase() ??
+                                          'S',
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 14,
@@ -332,7 +363,9 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                                 ),
                                 const SizedBox(width: 8),
                                 Icon(
-                                  dropdownOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                                  dropdownOpen
+                                      ? Icons.keyboard_arrow_up
+                                      : Icons.keyboard_arrow_down,
                                   color: const Color(0xFF6B7280),
                                   size: 16,
                                 ),
@@ -366,7 +399,9 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                                 child: _buildStatsCard(
                                   icon: '🪙',
                                   title: 'Total',
-                                  value: PetCoinWalletService.formatCoins(totalCoins),
+                                  value: PetCoinWalletService.formatCoins(
+                                    totalCoins,
+                                  ),
                                   bgColor: const Color(0xFFDCFCE7),
                                 ),
                               ),
@@ -376,16 +411,17 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                                   icon: '🏢',
                                   title: 'Company',
                                   value: PetCoinWalletService.formatCoins(
-                                    wallets.firstWhere(
-                                      (w) => w.userRole == 'company',
-                                      orElse: () => PetCoinWallet(
-                                        id: '',
-                                        userId: '',
-                                        balance: 0,
-                                        createdAt: DateTime.now(),
-                                        updatedAt: DateTime.now(),
-                                      ),
-                                    ).balance,
+                                    wallets
+                                        .firstWhere(
+                                          (w) => w.userRole == 'company',
+                                          orElse: () => PetCoinWallet(
+                                            id: '',
+                                            userId: '',
+                                            createdAt: DateTime.now(),
+                                            updatedAt: DateTime.now(),
+                                          ),
+                                        )
+                                        .totalBalance,
                                   ),
                                   bgColor: const Color(0xFFDBEAFE),
                                 ),
@@ -446,7 +482,10 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                       const SizedBox(height: 8),
                       // Role Badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF6366F1),
                           borderRadius: BorderRadius.circular(6),
@@ -462,10 +501,7 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                       ),
                       const SizedBox(height: 12),
                       // Divider
-                      Container(
-                        height: 1,
-                        color: const Color(0xFFE5E7EB),
-                      ),
+                      Container(height: 1, color: const Color(0xFFE5E7EB)),
                       const SizedBox(height: 12),
                       // Sign Out Button
                       GestureDetector(
@@ -529,10 +565,7 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
               borderRadius: BorderRadius.circular(6),
             ),
             child: Center(
-              child: Text(
-                icon,
-                style: const TextStyle(fontSize: 12),
-              ),
+              child: Text(icon, style: const TextStyle(fontSize: 12)),
             ),
           ),
           const SizedBox(height: 8),
@@ -593,11 +626,8 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Send coins from company to customers',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF64748B),
-                    ),
+                    'Send coins from company to any user',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                   ),
                 ],
               ),
@@ -608,8 +638,13 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                   });
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: showTransferForm ? const Color(0xFF6B7280) : const Color(0xFF10B981),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  backgroundColor: showTransferForm
+                      ? const Color(0xFF6B7280)
+                      : const Color(0xFF10B981),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -664,24 +699,24 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                     });
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: const Text(
                       '🔄 Refresh',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Color(0xFF64748B),
-                      ),
+                      style: TextStyle(fontSize: 10, color: Color(0xFF64748B)),
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            
+
             // Search Input
             TextField(
               controller: _userSearchController,
@@ -691,8 +726,13 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                 });
               },
               decoration: InputDecoration(
-                hintText: 'Search by email or role (e.g., customer, franchise)',
-                prefixIcon: const Icon(Icons.search, color: Color(0xFF94A3B8), size: 20),
+                hintText:
+                    'Search by email or role (e.g., franchise, channel_partner)',
+                prefixIcon: const Icon(
+                  Icons.search,
+                  color: Color(0xFF94A3B8),
+                  size: 20,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
@@ -703,15 +743,21 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
+                  borderSide: const BorderSide(
+                    color: Color(0xFF6366F1),
+                    width: 2,
+                  ),
                 ),
                 filled: true,
                 fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
               ),
             ),
             const SizedBox(height: 8),
-            
+
             // User Selection List
             Container(
               constraints: const BoxConstraints(maxHeight: 240),
@@ -734,12 +780,15 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: const Center(
-                                child: Text('👤', style: TextStyle(fontSize: 16)),
+                                child: Text(
+                                  '👤',
+                                  style: TextStyle(fontSize: 16),
+                                ),
                               ),
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              userSearchQuery.isNotEmpty 
+                              userSearchQuery.isNotEmpty
                                   ? 'No users found matching your search'
                                   : 'No users available',
                               style: const TextStyle(
@@ -775,7 +824,7 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                       itemBuilder: (context, index) {
                         final wallet = filteredUsers[index];
                         final isSelected = selectedUserId == wallet.userId;
-                        
+
                         return GestureDetector(
                           onTap: () {
                             setState(() {
@@ -783,11 +832,18 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                             });
                           },
                           child: Container(
-                            padding: const EdgeInsets.all(12),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
-                              color: isSelected ? const Color(0xFFEEF2FF) : Colors.transparent,
+                              color: isSelected
+                                  ? const Color(0xFFEEF2FF)
+                                  : Colors.transparent,
                               border: Border.all(
-                                color: isSelected ? const Color(0xFFC7D2FE) : Colors.transparent,
+                                color: isSelected
+                                    ? const Color(0xFFC7D2FE)
+                                    : Colors.transparent,
                                 width: 2,
                               ),
                             ),
@@ -795,54 +851,80 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
-                                          Expanded(
+                                          Flexible(
                                             child: Text(
                                               wallet.userEmail ?? 'Unknown',
                                               style: const TextStyle(
-                                                fontSize: 14,
+                                                fontSize: 11,
                                                 fontWeight: FontWeight.w600,
                                                 color: Color(0xFF1F2937),
                                               ),
+                                              overflow: TextOverflow.ellipsis,
+                                              maxLines: 1,
                                             ),
                                           ),
+                                          const SizedBox(width: 3),
                                           Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 60,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 3,
+                                              vertical: 1,
+                                            ),
                                             decoration: BoxDecoration(
-                                              color: _getRoleColor(wallet.userRole ?? 'customer'),
-                                              borderRadius: BorderRadius.circular(12),
+                                              color: _getRoleColor(
+                                                wallet.userRole ?? 'customer',
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(4),
                                             ),
                                             child: Text(
-                                              _getRoleDisplayName(wallet.userRole ?? 'customer'),
+                                              _getRoleDisplayName(
+                                                wallet.userRole ?? 'customer',
+                                              ),
                                               style: const TextStyle(
-                                                fontSize: 10,
+                                                fontSize: 7,
                                                 fontWeight: FontWeight.w600,
                                                 color: Colors.white,
                                               ),
+                                              overflow: TextOverflow.ellipsis,
+                                              maxLines: 1,
                                             ),
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 4),
+                                      const SizedBox(height: 3),
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
-                                          Text(
-                                            'ID: ${wallet.id.substring(0, 8)}...',
-                                            style: const TextStyle(
-                                              fontSize: 10,
-                                              color: Color(0xFF64748B),
+                                          Flexible(
+                                            flex: 1,
+                                            child: Text(
+                                              'ID: ${wallet.id.substring(0, 5)}',
+                                              style: const TextStyle(
+                                                fontSize: 8,
+                                                color: Color(0xFF64748B),
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
-                                          Text(
-                                            '${PetCoinWalletService.formatCoins(wallet.balance)} 🪙',
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                              color: Color(0xFF374151),
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            flex: 1,
+                                            child: Text(
+                                              '${PetCoinWalletService.formatCoins(wallet.totalBalance)} 🪙',
+                                              style: const TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: Color(0xFF374151),
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.right,
                                             ),
                                           ),
                                         ],
@@ -850,12 +932,14 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                                     ],
                                   ),
                                 ),
-                                if (isSelected)
+                                if (isSelected) ...[
+                                  const SizedBox(width: 4),
                                   const Icon(
                                     Icons.check,
                                     color: Color(0xFF6366F1),
-                                    size: 16,
+                                    size: 14,
                                   ),
+                                ],
                               ],
                             ),
                           ),
@@ -863,7 +947,7 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                       },
                     ),
             ),
-            
+
             // Selected User Display
             if (selectedUserId.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -892,16 +976,86 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
             ],
           ],
         ),
-        
+
         const SizedBox(height: 16),
-        
-        // Amount Input
+
+        // Coin Type Selection
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Amount (PET Coins)',
+              'Select Coin Type',
               style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF374151),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: coinTypes.entries.map((entry) {
+                final coinType = entry.key;
+                final config = entry.value;
+                final isSelected = selectedCoinType == coinType;
+
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        selectedCoinType = coinType;
+                      });
+                    },
+                    child: Container(
+                      margin: EdgeInsets.only(
+                        right: coinType == coinTypes.keys.last ? 0 : 8,
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected ? config['color'] : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isSelected
+                              ? config['color'] as Color
+                              : const Color(0xFFD1D5DB),
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            config['icon'] as String,
+                            style: const TextStyle(fontSize: 24),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            config['name'] as String,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isSelected
+                                  ? Colors.white
+                                  : const Color(0xFF374151),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 16),
+
+        // Amount Input
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Amount (${coinTypes[selectedCoinType]!['name'] as String})',
+              style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF374151),
@@ -913,6 +1067,11 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 hintText: 'Enter amount',
+                prefixIcon: Icon(
+                  Icons.account_balance_wallet,
+                  color: coinTypes[selectedCoinType]!['color'] as Color,
+                  size: 20,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
@@ -923,18 +1082,24 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
+                  borderSide: BorderSide(
+                    color: coinTypes[selectedCoinType]!['color'] as Color,
+                    width: 2,
+                  ),
                 ),
                 filled: true,
                 fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
               ),
             ),
           ],
         ),
-        
+
         const SizedBox(height: 16),
-        
+
         // Action Buttons
         Row(
           children: [
@@ -958,7 +1123,9 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                             height: 16,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           ),
                           SizedBox(width: 8),
@@ -972,17 +1139,20 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                           ),
                         ],
                       )
-                    : const Row(
+                    : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text('🪙', style: TextStyle(fontSize: 14)),
-                          SizedBox(width: 8),
-                          Text(
-                            'Transfer Coins',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                          const Text('🪙', style: TextStyle(fontSize: 12)),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              'Transfer Coins',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -1048,9 +1218,7 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                 topLeft: Radius.circular(16),
                 topRight: Radius.circular(16),
               ),
-              border: Border(
-                bottom: BorderSide(color: Color(0xFFE2E8F0)),
-              ),
+              border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1082,7 +1250,10 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                     loadTotalCoins();
                   },
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF6366F1),
                       borderRadius: BorderRadius.circular(8),
@@ -1107,7 +1278,7 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
               ],
             ),
           ),
-          
+
           // Content
           Padding(
             padding: const EdgeInsets.all(12),
@@ -1123,7 +1294,9 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF6366F1)),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF6366F1),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -1139,46 +1312,48 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                     ),
                   )
                 : wallets.isEmpty
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            children: [
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFF1F5F9),
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                                child: const Center(
-                                  child: Text('🪙', style: TextStyle(fontSize: 24)),
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'No wallets found',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: Color(0xFF64748B),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Wallets will appear here',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF94A3B8),
-                                ),
-                              ),
-                            ],
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: const Center(
+                              child: Text('🪙', style: TextStyle(fontSize: 24)),
+                            ),
                           ),
-                        ),
-                      )
-                    : Column(
-                        children: wallets.map((wallet) => _buildWalletCard(wallet)).toList(),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'No wallets found',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF64748B),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Wallets will appear here',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ),
+                        ],
                       ),
+                    ),
+                  )
+                : Column(
+                    children: wallets
+                        .map((wallet) => _buildWalletCard(wallet))
+                        .toList(),
+                  ),
           ),
         ],
       ),
@@ -1187,8 +1362,8 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
 
   Widget _buildWalletCard(PetCoinWallet wallet) {
     final isCompany = wallet.userRole == 'company';
-    final hasBalance = wallet.balance > 0;
-    
+    final hasBalance = wallet.totalBalance > 0;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -1209,17 +1384,19 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                       colors: [Color(0xFFF59E0B), Color(0xFFEA580C)],
                     )
                   : hasBalance
-                      ? const LinearGradient(
-                          colors: [Color(0xFF10B981), Color(0xFF059669)],
-                        )
-                      : const LinearGradient(
-                          colors: [Color(0xFF6B7280), Color(0xFF4B5563)],
-                        ),
+                  ? const LinearGradient(
+                      colors: [Color(0xFF10B981), Color(0xFF059669)],
+                    )
+                  : const LinearGradient(
+                      colors: [Color(0xFF6B7280), Color(0xFF4B5563)],
+                    ),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Center(
               child: Text(
-                isCompany ? '🏢' : (wallet.userEmail?.substring(0, 1).toUpperCase() ?? 'U'),
+                isCompany
+                    ? '🏢'
+                    : (wallet.userEmail?.substring(0, 1).toUpperCase() ?? 'U'),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
@@ -1229,7 +1406,7 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
             ),
           ),
           const SizedBox(width: 12),
-          
+
           // Wallet Info
           Expanded(
             child: Column(
@@ -1249,7 +1426,10 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: _getRoleColor(wallet.userRole ?? 'customer'),
                         borderRadius: BorderRadius.circular(12),
@@ -1276,25 +1456,95 @@ class _CoinWalletsPageState extends State<CoinWalletsPage> {
                         color: Color(0xFF64748B),
                       ),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '${PetCoinWalletService.formatCoins(wallet.balance)} 🪙',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1F2937),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '${PetCoinWalletService.formatCoins(wallet.totalBalance)} 🪙',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1F2937),
+                            ),
                           ),
-                        ),
-                        Text(
-                          hasBalance ? 'Active' : 'Empty',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFF64748B),
+                          Text(
+                            hasBalance ? 'Active' : 'Empty',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF64748B),
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 2,
+                            runSpacing: 2,
+                            alignment: WrapAlignment.end,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 3,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFF3B82F6,
+                                  ).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Text(
+                                  'NT: ${PetCoinWalletService.formatCoins(wallet.petntBalance)}',
+                                  style: const TextStyle(
+                                    fontSize: 7,
+                                    color: Color(0xFF1F2937),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 3,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFF10B981,
+                                  ).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Text(
+                                  'BNT: ${PetCoinWalletService.formatCoins(wallet.petbntBalance)}',
+                                  style: const TextStyle(
+                                    fontSize: 7,
+                                    color: Color(0xFF1F2937),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 3,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFFF59E0B,
+                                  ).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Text(
+                                  'INDX: ${PetCoinWalletService.formatCoins(wallet.petindxBalance)}',
+                                  style: const TextStyle(
+                                    fontSize: 7,
+                                    color: Color(0xFF1F2937),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
