@@ -100,7 +100,8 @@ class CoinTypesService {
         case 'petINDX':
           return (response['petindx_balance'] as num?)?.toDouble() ?? 0.0;
         default:
-          return (response['balance'] as num?)?.toDouble() ?? 0.0;
+          // If coin type is not recognized, default to petNT
+          return (response['petnt_balance'] as num?)?.toDouble() ?? 0.0;
       }
     } catch (e) {
       print('Error fetching coin balance: $e');
@@ -129,12 +130,7 @@ class CoinTypesService {
       double petindxBalance =
           (response['petindx_balance'] as num?)?.toDouble() ?? 0.0;
 
-      // For backward compatibility: if petNT balance is 0 but legacy 'balance' exists,
-      // use the legacy balance as petNT balance
-      double legacyBalance = (response['balance'] as num?)?.toDouble() ?? 0.0;
-      if (petntBalance == 0.0 && legacyBalance > 0.0) {
-        petntBalance = legacyBalance;
-      }
+      // No legacy balance support needed - all balances use the new columns
 
       return {
         'petNT': petntBalance,

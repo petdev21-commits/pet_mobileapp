@@ -337,7 +337,9 @@ class PetCoinWalletService {
           balanceColumn = 'petindx_balance';
           break;
         default:
-          currentBalance = (fromResponse['balance'] as num?)?.toDouble() ?? 0.0;
+          // If coin type is not recognized, default to petNT
+          currentBalance =
+              (fromResponse['petnt_balance'] as num?)?.toDouble() ?? 0.0;
       }
 
       // Check if sufficient balance
@@ -370,7 +372,6 @@ class PetCoinWalletService {
         // Create wallet with 0 balance for all coin types
         await _client.from('pet_coin_wallets').insert({
           'user_id': toUserId,
-          'balance': 0.0,
           'petnt_balance': 0.0,
           'petbnt_balance': 0.0,
           'petindx_balance': 0.0,

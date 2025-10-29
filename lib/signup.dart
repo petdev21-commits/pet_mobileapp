@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'signin.dart';
 import 'services/auth_service.dart';
-import 'Dashboard/admin.dart';
-import 'Dashboard/customer.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -38,31 +36,39 @@ class _SignUpPageState extends State<SignUpPage> {
       final response = await AuthService.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
-        name: _emailController.text.trim().split('@')[0], // Extract name from email
+        name: _emailController.text.trim().split(
+          '@',
+        )[0], // Extract name from email
         role: selectedRole,
       );
 
       if (response.success) {
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account created successfully!'),
-            backgroundColor: Colors.green,
+        // Show verification dialog
+        final email = _emailController.text.trim();
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Text('Verification Email Sent'),
+            content: Text(
+              'A verification email has been sent to $email. '
+              'Please check your email and verify your account before signing in.',
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context); // Close dialog
+                  Navigator.pop(context); // Go back to sign in
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3B82F6),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('OK'),
+              ),
+            ],
           ),
         );
-        
-        // Navigate to appropriate dashboard based on user role
-        if (response.user?.role == 'admin') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const AdminDashboard()),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const CustomerDashboard()),
-          );
-        }
       } else {
         // Show error message
         ScaffoldMessenger.of(context).showSnackBar(
@@ -107,7 +113,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Sign in link
               GestureDetector(
                 onTap: () {
@@ -137,7 +143,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
               ),
               const SizedBox(height: 32),
-              
+
               // Form
               Form(
                 key: _formKey,
@@ -147,7 +153,9 @@ class _SignUpPageState extends State<SignUpPage> {
                     Container(
                       decoration: BoxDecoration(
                         color: const Color(0xFFF9FAFB), // Light grey background
-                        border: Border.all(color: const Color(0xFFE5E7EB)), // Light gray border
+                        border: Border.all(
+                          color: const Color(0xFFE5E7EB),
+                        ), // Light gray border
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Column(
@@ -160,7 +168,9 @@ class _SignUpPageState extends State<SignUpPage> {
                               if (value == null || value.isEmpty) {
                                 return 'Please enter your email';
                               }
-                              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                              if (!RegExp(
+                                r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                              ).hasMatch(value)) {
                                 return 'Please enter a valid email';
                               }
                               return null;
@@ -281,7 +291,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // Create account button
               SizedBox(
                 width: double.infinity,
@@ -302,7 +312,9 @@ class _SignUpPageState extends State<SignUpPage> {
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : const Text(

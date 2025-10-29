@@ -540,130 +540,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
     );
   }
 
-  Future<void> _showAddUserDialog() async {
-    final nameController = TextEditingController();
-    final emailController = TextEditingController();
-    final passwordController = TextEditingController();
-    String selectedRole = 'customer';
-
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add New User'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: emailController,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: passwordController,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
-                ),
-                obscureText: true,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: selectedRole,
-                decoration: const InputDecoration(
-                  labelText: 'Role',
-                  border: OutlineInputBorder(),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'customer', child: Text('Customer')),
-                  DropdownMenuItem(value: 'merchant', child: Text('Merchant')),
-                  DropdownMenuItem(value: 'partner', child: Text('Partner')),
-                  DropdownMenuItem(
-                    value: 'franchise',
-                    child: Text('Franchise'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'sub-franchise',
-                    child: Text('Sub-Franchise'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'channel_partner',
-                    child: Text('Channel Partner'),
-                  ),
-                  DropdownMenuItem(value: 'bank', child: Text('Bank')),
-                  DropdownMenuItem(value: 'admin', child: Text('Admin')),
-                ],
-                onChanged: (value) {
-                  selectedRole = value ?? 'customer';
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final newUser = NewUser(
-                email: emailController.text,
-                password: passwordController.text,
-                role: selectedRole,
-              );
-
-              final validation = UserManagementService.validateUserData(
-                newUser,
-              );
-              if (validation != null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(validation),
-                    backgroundColor: const Color(0xFFEF4444),
-                  ),
-                );
-                return;
-              }
-
-              final result = await UserManagementService.createUser(newUser);
-              if (result.success) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('User created successfully!'),
-                    backgroundColor: Color(0xFF10B981),
-                  ),
-                );
-                Navigator.pop(context);
-                loadUsers(); // Refresh the user list
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error creating user: ${result.error}'),
-                    backgroundColor: const Color(0xFFEF4444),
-                  ),
-                );
-              }
-            },
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -877,10 +753,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
                           ),
                           const SizedBox(height: 16),
 
-                          // Add New User Card
-                          _buildAddUserCard(),
-                          const SizedBox(height: 16),
-
                           // Search Users Card
                           _buildSearchUsersCard(),
                           const SizedBox(height: 16),
@@ -1036,67 +908,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
               fontSize: 24,
               fontWeight: FontWeight.bold,
               color: Color(0xFF1F2937),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAddUserCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Add New User',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1F2937),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Create a user account with any role',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          ),
-          ElevatedButton(
-            onPressed: _showAddUserDialog,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF8B5CF6),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              elevation: 0,
-            ),
-            child: const Text(
-              'Add',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
             ),
           ),
         ],

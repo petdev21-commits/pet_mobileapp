@@ -48,7 +48,9 @@ class SupabaseService {
         // Create pet coin wallet for the user
         await _client.from('pet_coin_wallets').insert({
           'user_id': authResponse.user!.id,
-          'balance': 0.0,
+          'petnt_balance': 0.0,
+          'petbnt_balance': 0.0,
+          'petindx_balance': 0.0,
         });
 
         // Build response user data
@@ -234,7 +236,9 @@ class SupabaseService {
           // Create pet coin wallet for the user
           await _client.from('pet_coin_wallets').insert({
             'user_id': user.id,
-            'balance': 0.0,
+            'petnt_balance': 0.0,
+            'petbnt_balance': 0.0,
+            'petindx_balance': 0.0,
           });
 
           // Build response user data

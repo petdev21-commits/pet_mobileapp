@@ -31,8 +31,84 @@
 
   <title>flutter_application_1</title>
   <link rel="manifest" href="manifest.json">
+  
+  <!-- Download App Button Styles -->
+  <style>
+    #downloadAppBtn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: linear-gradient(135deg, #3B82F6 0%, #8B5CF6 100%);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      z-index: 10000;
+      transition: all 0.3s ease;
+    }
+    
+    #downloadAppBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+    }
+    
+    #downloadAppBtn:active {
+      transform: translateY(0);
+    }
+    
+    .download-icon {
+      width: 20px;
+      height: 20px;
+    }
+  </style>
 </head>
 <body>
+  <!-- Download Android App Button -->
+  <button id="downloadAppBtn" onclick="downloadAndroidApp()">
+    <svg class="download-icon" fill="currentColor" viewBox="0 0 24 24">
+      <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
+    </svg>
+    Download Android App
+  </button>
+
+  <script>
+    function downloadAndroidApp() {
+      // Direct link to APK file - use absolute path
+      const apkUrl = 'app-release.apk'; // Path relative to current directory
+      
+      // Use fetch to download the file
+      fetch(apkUrl)
+        .then(response => {
+          if (!response.ok) throw new Error('Network response was not ok');
+          return response.blob();
+        })
+        .then(blob => {
+          // Create object URL from blob
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'petapp.apk';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          
+          alert('Download started! Please check your downloads folder.');
+        })
+        .catch(error => {
+          console.error('Download error:', error);
+          alert('Error downloading the app. Please try again or contact support.');
+        });
+    }
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
